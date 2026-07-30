@@ -26,7 +26,8 @@ create table public.entries (
 
 create table public.settings (
   id int primary key default 1 check (id = 1),
-  target int not null default 20
+  target int not null default 20,
+  note text
 );
 insert into public.settings (id, target) values (1, 20);
 

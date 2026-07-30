@@ -68,7 +68,7 @@
     color: var(--text-faint);
     margin-bottom: 6px;
   }
-  select, input[type="text"], input[type="number"], input[type="date"], input[type="password"], input[type="email"] {
+  select, input[type="text"], input[type="number"], input[type="date"], input[type="password"], input[type="email"], textarea {
     width: 100%;
     background: var(--panel-raised);
     border: 1px solid var(--line);
@@ -78,6 +78,7 @@
     border-radius: 8px;
     padding: 10px 11px;
   }
+  textarea { resize: vertical; }
   select:focus, input:focus { outline: none; border-color: var(--ember-dim); }
   input[type="date"] { color-scheme: dark; }
 
@@ -286,6 +287,11 @@
     <button class="link" onclick="openPwModal()">Change password</button>
   </div>
 
+  <div class="panel hidden" id="staffNoteBanner" style="margin-bottom:24px;border-color:var(--ember-dim);">
+    <p class="stat-label" style="margin-bottom:8px;">Note from management</p>
+    <p id="staffNoteText" style="margin:0;font-size:14px;line-height:1.5;white-space:pre-wrap;"></p>
+  </div>
+
   <div class="stat-grid">
     <div class="stat-card">
       <p class="stat-label">Your conversion rate</p>
@@ -377,6 +383,18 @@
   </div>
 
   <section>
+    <div class="section-head"><h2>Team note</h2></div>
+    <div class="panel">
+      <div class="field" style="margin-bottom:12px;">
+        <label>Shown on every staff member's page</label>
+        <textarea id="mgmtNoteInput" rows="3" placeholder="e.g. Everyone who hits target this month gets a $50 bonus."></textarea>
+      </div>
+      <button class="primary" style="width:auto;" id="mgmtSaveNoteBtn">Save note</button>
+      <p class="error" id="mgmtNoteError"></p>
+    </div>
+  </section>
+
+  <section>
     <div class="section-head">
       <h2>Staff performance</h2>
       <button onclick="exportCsv()">Export CSV</button>
@@ -445,6 +463,7 @@ let session = null;
 let profile = null;
 let routing = false;
 let target = 20;
+let teamNote = '';
 let leaderboardRows = [];
 let leaderboardProfiles = [];
 let leaderboardMonth = null;
@@ -556,8 +575,9 @@ async function route() {
   if (profileErr || !p) { await supabase.auth.signOut(); return; }
   profile = p;
 
-  const { data: settingsRow } = await supabase.from('settings').select('target').eq('id', 1).single();
+  const { data: settingsRow } = await supabase.from('settings').select('target, note').eq('id', 1).single();
   target = settingsRow ? settingsRow.target : 20;
+  teamNote = settingsRow?.note || '';
 
   hideAll();
   if (profile.role === 'manager') {
@@ -645,6 +665,14 @@ async function renderStaffHome() {
   document.getElementById('staffHomeName').textContent = profile.name;
   document.getElementById('staffAccountEmail').textContent = session.user.email;
 
+  const noteBanner = document.getElementById('staffNoteBanner');
+  if (teamNote) {
+    document.getElementById('staffNoteText').textContent = teamNote;
+    noteBanner.classList.remove('hidden');
+  } else {
+    noteBanner.classList.add('hidden');
+  }
+
   const rows = await fetchOwnEntries();
   const visits = rows.reduce((a, r) => a + r.visits, 0);
   const sold = rows.reduce((a, r) => a + r.sold, 0);
@@ -701,6 +729,7 @@ async function removeStaffEntry(id) {
 
 async function renderMgmtHome() {
   document.getElementById('mgmtAccountEmail').textContent = session?.user?.email || '';
+  document.getElementById('mgmtNoteInput').value = teamNote;
 
   const { data: staffList } = await supabase.from('profiles').select('*').order('name');
   const staff = staffList || [];
@@ -836,6 +865,16 @@ async function removeMgmtEntry(id) {
   await renderMgmtHome();
 }
 
+async function saveTeamNote() {
+  const input = document.getElementById('mgmtNoteInput');
+  const errEl = document.getElementById('mgmtNoteError');
+  const value = input.value.trim();
+  errEl.textContent = '';
+  const { error } = await supabase.from('settings').update({ note: value || null }).eq('id', 1);
+  if (error) { errEl.textContent = error.message; return; }
+  teamNote = value;
+}
+
 function exportCsv() {
   const entries = window.__mgmtEntriesCache || [];
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
@@ -869,6 +908,7 @@ document.getElementById('staffAddEntryBtn').addEventListener('click', addStaffEn
 document.getElementById('mgmtAddStaffBtn').addEventListener('click', addStaffMgmt);
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
+document.getElementById('mgmtSaveNoteBtn').addEventListener('click', saveTeamNote);
 document.getElementById('mgmtTargetInput').addEventListener('change', async e => {
   const v = parseInt(e.target.value, 10);
   const newTarget = isNaN(v) ? 20 : v;
