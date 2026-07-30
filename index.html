@@ -803,10 +803,6 @@ supabase.auth.onAuthStateChange((_event, s) => {
   route();
 });
 
-supabase.auth.getSession().then(({ data }) => {
-  session = data.session;
-  route();
-});
 </script>
 </body>
 </html>
