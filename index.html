@@ -427,6 +427,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let session = null;
 let profile = null;
+let routing = false;
 let target = 20;
 
 let logoClicks = 0;
@@ -800,8 +801,9 @@ document.getElementById('easterEgg').addEventListener('click', () => {
 
 supabase.auth.onAuthStateChange((_event, s) => {
   session = s;
-  route();
-});
+if (routing) return;
+  routing = true;
+  route().finally(() => { routing = false; });});
 
 </script>
 </body>
