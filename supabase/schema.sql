@@ -145,3 +145,41 @@ create policy "settings updatable by manager"
   to authenticated
   using (public.is_manager())
   with check (public.is_manager());
+
+-- ---------------------------------------------------------------------------
+-- Leaderboard: per-staff, per-month totals for everyone, visible to any
+-- signed-in user. Security definer so staff (who can only read their own
+-- rows in `entries` per the policy above) still get the aggregate figures
+-- for the whole team, without exposing anyone's individual daily entries.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.monthly_leaderboard()
+returns table (
+  staff_id uuid,
+  name text,
+  month date,
+  visits bigint,
+  sold bigint,
+  rate numeric
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    p.id as staff_id,
+    p.name,
+    date_trunc('month', e.date)::date as month,
+    sum(e.visits) as visits,
+    sum(e.sold) as sold,
+    case when sum(e.visits) > 0
+      then round(sum(e.sold)::numeric / sum(e.visits) * 100, 1)
+      else 0
+    end as rate
+  from public.entries e
+  join public.profiles p on p.id = e.staff_id
+  group by p.id, p.name, date_trunc('month', e.date);
+$$;
+
+grant execute on function public.monthly_leaderboard() to authenticated;

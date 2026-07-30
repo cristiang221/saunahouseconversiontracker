@@ -419,6 +419,22 @@
   </section>
 </div>
 
+<div class="wrap hidden" id="leaderboardView">
+  <section>
+    <div class="section-head">
+      <h2>Leaderboard</h2>
+      <select id="leaderboardMonthSelect" style="width:auto;"></select>
+    </div>
+    <div class="panel" style="padding: 8px 22px;">
+      <table>
+        <thead><tr><th>#</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th></tr></thead>
+        <tbody id="leaderboardTbody"></tbody>
+      </table>
+      <div class="empty hidden" id="leaderboardEmpty">No entries logged for this month yet.</div>
+    </div>
+  </section>
+</div>
+
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
@@ -429,6 +445,9 @@ let session = null;
 let profile = null;
 let routing = false;
 let target = 20;
+let leaderboardRows = [];
+let leaderboardProfiles = [];
+let leaderboardMonth = null;
 
 let logoClicks = 0;
 let logoClickTimer = null;
@@ -451,7 +470,7 @@ function escapeHtml(str) { const d = document.createElement('div'); d.textConten
 function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 
 function hideAll() {
-  ['signInView', 'firstSetupView', 'staffHomeView', 'mgmtHomeView'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  ['signInView', 'firstSetupView', 'staffHomeView', 'mgmtHomeView', 'leaderboardView'].forEach(id => document.getElementById(id).classList.add('hidden'));
 }
 
 function showSignIn() {
@@ -548,6 +567,69 @@ async function route() {
     await renderStaffHome();
     document.getElementById('staffHomeView').classList.remove('hidden');
   }
+  await loadLeaderboard();
+  document.getElementById('leaderboardView').classList.remove('hidden');
+}
+
+function monthLabel(key) {
+  const d = new Date(key + '-01T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+async function loadLeaderboard() {
+  const [{ data: profilesData }, { data: lbRows, error }] = await Promise.all([
+    supabase.from('profiles').select('id, name').order('name'),
+    supabase.rpc('monthly_leaderboard'),
+  ]);
+  leaderboardProfiles = profilesData || [];
+  leaderboardRows = error ? [] : lbRows;
+
+  const months = new Set(leaderboardRows.map(r => r.month.slice(0, 7)));
+  months.add(new Date().toISOString().slice(0, 7));
+  const sortedMonths = [...months].sort().reverse();
+  if (!leaderboardMonth || !sortedMonths.includes(leaderboardMonth)) leaderboardMonth = sortedMonths[0];
+
+  const sel = document.getElementById('leaderboardMonthSelect');
+  sel.innerHTML = sortedMonths.map(m => `<option value="${m}" ${m === leaderboardMonth ? 'selected' : ''}>${monthLabel(m)}</option>`).join('');
+
+  renderLeaderboardTable();
+}
+
+function renderLeaderboardTable() {
+  const monthRows = leaderboardRows.filter(r => r.month.slice(0, 7) === leaderboardMonth);
+  const byStaff = Object.fromEntries(monthRows.map(r => [r.staff_id, r]));
+  const combined = leaderboardProfiles
+    .map(p => {
+      const r = byStaff[p.id];
+      return {
+        staff_id: p.id,
+        name: p.name,
+        visits: r ? Number(r.visits) : 0,
+        sold: r ? Number(r.sold) : 0,
+        rate: r ? Number(r.rate) : 0,
+      };
+    })
+    .sort((a, b) => b.sold - a.sold || b.rate - a.rate);
+
+  const tbody = document.getElementById('leaderboardTbody');
+  const emptyEl = document.getElementById('leaderboardEmpty');
+  if (!combined.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  tbody.innerHTML = combined.map((r, i) => {
+    const hit = r.rate >= target;
+    const isMe = profile && r.staff_id === profile.id;
+    return `<tr${isMe ? ' style="background:var(--panel-raised);"' : ''}>
+      <td class="num">${i + 1}${i === 0 && r.sold > 0 ? ' 🔥' : ''}</td>
+      <td>${escapeHtml(r.name)}${isMe ? ' <span class="badge">you</span>' : ''}</td>
+      <td class="num">${r.visits}</td>
+      <td class="num">${r.sold}</td>
+      <td class="rate-cell ${hit ? 'hit' : 'miss'}">${r.rate.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
 }
 
 async function fetchOwnEntries() {
@@ -797,6 +879,11 @@ document.getElementById('mgmtTargetInput').addEventListener('change', async e =>
 
 document.getElementById('easterEgg').addEventListener('click', () => {
   document.getElementById('easterEgg').classList.remove('show');
+});
+
+document.getElementById('leaderboardMonthSelect').addEventListener('change', e => {
+  leaderboardMonth = e.target.value;
+  renderLeaderboardTable();
 });
 
 supabase.auth.onAuthStateChange((_event, s) => {
