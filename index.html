@@ -618,7 +618,7 @@ async function removeStaffEntry(id) {
 }
 
 async function renderMgmtHome() {
-  document.getElementById('mgmtAccountEmail').textContent = session.user.email;
+  document.getElementById('mgmtAccountEmail').textContent = session?.user?.email || '';
 
   const { data: staffList } = await supabase.from('profiles').select('*').order('name');
   const staff = staffList || [];
