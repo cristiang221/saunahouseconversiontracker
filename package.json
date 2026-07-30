@@ -1,0 +1,9 @@
+{
+  "name": "sauna-conversion-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Membership conversion tracker for staff logging and management reporting.",
+  "dependencies": {
+    "@supabase/supabase-js": "^2"
+  }
+}

@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Membership Conversion Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #1B1815;
+    --panel: #24201B;
+    --panel-raised: #2C2721;
+    --line: #3D362D;
+    --line-soft: #322C25;
+    --text: #F3EDE2;
+    --text-dim: #B8AE9E;
+    --text-faint: #7C7364;
+    --ember: #E07A3F;
+    --ember-dim: #7A3F1E;
+    --sage: #7FA593;
+    --danger: #C1553F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    padding: 40px 24px 80px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  .wrap.narrow { max-width: 420px; }
+  header { margin-bottom: 32px; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 30px;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--text-dim); font-size: 14px; margin: 0; line-height: 1.5; }
+  h2 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 18px; margin: 0; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 24px;
+  }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+  select, input[type="text"], input[type="number"], input[type="date"], input[type="password"], input[type="email"] {
+    width: 100%;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    border-radius: 8px;
+    padding: 10px 11px;
+  }
+  select:focus, input:focus { outline: none; border-color: var(--ember-dim); }
+  input[type="date"] { color-scheme: dark; }
+
+  button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 13.5px;
+    border-radius: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--line);
+    background: var(--panel-raised);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--text-faint); }
+  button.primary { background: var(--ember); border-color: var(--ember); color: #221208; width: 100%; }
+  button.primary:hover { background: #EC8A54; }
+  button.ghost { background: transparent; border: none; color: var(--text-faint); padding: 4px 8px; font-size: 12px; }
+  button.ghost:hover { color: var(--danger); }
+  button.link { background: none; border: none; color: var(--text-faint); text-decoration: underline; font-size: 12.5px; padding: 0; }
+
+  .error { color: var(--danger); font-size: 12.5px; margin: 8px 0 0; min-height: 16px; }
+  .notice { color: var(--sage); font-size: 12.5px; margin: 8px 0 0; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
+  .account-row { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .account-row span { font-size: 12.5px; color: var(--text-faint); }
+  .badge { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--sage); border: 1px solid var(--sage); border-radius: 999px; padding: 2px 8px; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 14px; margin-bottom: 28px; }
+  .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px; }
+  .stat-value { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 500; }
+
+  section { margin-bottom: 28px; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint);
+    font-weight: 400; padding: 0 10px 10px; border-bottom: 1px solid var(--line);
+  }
+  tbody td { padding: 11px 10px; font-size: 13.5px; border-bottom: 1px solid var(--line-soft); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: 'JetBrains Mono', monospace; }
+  td.rate-cell { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  td.rate-cell.hit { color: var(--sage); }
+  td.rate-cell.miss { color: var(--ember); }
+
+  .empty { color: var(--text-faint); font-size: 13.5px; padding: 20px 0; text-align: center; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 16px; }
+  .inline-row { display: flex; gap: 10px; }
+  .inline-row input { flex: 1; }
+  .staff-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); gap: 10px; flex-wrap: wrap; }
+  .staff-row:last-child { border-bottom: none; }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 560px) {
+    .form-row { grid-template-columns: 1fr; }
+  }
+
+  .brand-header { text-align: center; }
+  .brand-logo { width: 84px; height: auto; margin-bottom: 16px; }
+  .brand-logo.small { width: 52px; margin-bottom: 12px; }
+  .brand-header .sub { max-width: 420px; margin-left: auto; margin-right: auto; }
+
+  .easter-egg-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 17, 14, 0.94);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 999;
+    cursor: pointer;
+    overflow: hidden;
+    text-align: center;
+    padding: 20px;
+  }
+  .easter-egg-overlay.show { display: flex; }
+  .steam {
+    position: absolute;
+    bottom: 10%;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(224,140,80,0.35), rgba(46,139,156,0.15));
+    filter: blur(8px);
+    animation: rise 3.2s ease-in infinite;
+    opacity: 0;
+  }
+  @keyframes rise {
+    0% { transform: translateY(0) scale(0.6); opacity: 0; }
+    15% { opacity: 0.85; }
+    100% { transform: translateY(-360px) scale(1.8); opacity: 0; }
+  }
+  .egg-emoji { font-size: 40px; margin-bottom: 6px; }
+  .egg-message { font-family: 'Fraunces', serif; font-weight: 500; font-size: 26px; color: var(--text); position: relative; }
+  .egg-sub { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-faint); margin-top: 10px; position: relative; }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 17, 14, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 998;
+    padding: 20px;
+  }
+  .modal-overlay .panel { max-width: 360px; width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="easter-egg-overlay" id="easterEgg">
+  <div class="steam" style="left:44%; animation-delay:0s;"></div>
+  <div class="steam" style="left:50%; animation-delay:0.6s;"></div>
+  <div class="steam" style="left:56%; animation-delay:1.1s;"></div>
+  <div class="steam" style="left:47%; animation-delay:1.7s;"></div>
+  <div class="steam" style="left:53%; animation-delay:0.3s;"></div>
+  <div class="egg-emoji">🔥💧</div>
+  <div class="egg-message">You've found the heat.</div>
+  <div class="egg-sub">Sauna House legend, est. today. Tap anywhere to close.</div>
+</div>
+
+<div class="modal-overlay hidden" id="pwModalOverlay">
+  <div class="panel">
+    <h2 style="margin-bottom:14px;">Change password</h2>
+    <div class="field">
+      <label>New password</label>
+      <input type="password" id="pwNew" placeholder="At least 8 characters">
+    </div>
+    <div class="field">
+      <label>Confirm new password</label>
+      <input type="password" id="pwConfirm">
+    </div>
+    <button class="primary" id="pwSaveBtn">Save password</button>
+    <button class="link" style="margin-top:12px;" id="pwCancelBtn">Cancel</button>
+    <p class="error" id="pwError"></p>
+  </div>
+</div>
+
+<div class="wrap narrow hidden" id="signInView">
+  <header class="brand-header">
+    <img src="data:image/webp;base64,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" alt="Sauna House logo" class="brand-logo" id="mainLogo" onclick="handleLogoClick()" style="cursor:pointer;" title="👀">
+    <p class="eyebrow">Sauna house</p>
+    <h1>Conversion tracker</h1>
+    <p class="sub">Sign in with your email and password.</p>
+  </header>
+  <div class="panel">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="signInEmail" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="signInPassword" autocomplete="current-password">
+    </div>
+    <button class="primary" id="signInBtn">Sign in</button>
+    <p class="error" id="signInError"></p>
+  </div>
+  <p class="sub" style="text-align:center; margin-top:16px;">No account yet? Ask management to add you.</p>
+</div>
+
+<div class="wrap narrow hidden" id="firstSetupView">
+  <header class="brand-header">
+    <img src="data:image/webp;base64,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" alt="Sauna House logo" class="brand-logo">
+    <p class="eyebrow">First-time setup</p>
+    <h1>Create the management account</h1>
+    <p class="sub">No manager account exists yet. Create the first one now — it becomes the management login for this Sauna House.</p>
+  </header>
+  <div class="panel">
+    <div class="field">
+      <label>Your name</label>
+      <input type="text" id="setupName">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="setupEmail" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="setupPassword" autocomplete="new-password" placeholder="At least 8 characters">
+    </div>
+    <button class="primary" id="setupBtn">Create management account</button>
+    <p class="error" id="setupError"></p>
+  </div>
+</div>
+
+<div class="wrap hidden" id="staffHomeView">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <img src="data:image/webp;base64,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" alt="Sauna House logo" style="width:36px;height:auto;">
+      <div>
+        <p class="eyebrow" style="margin-bottom:4px;">Staff view</p>
+        <h1 id="staffHomeName" style="font-size:22px;margin:0;">—</h1>
+      </div>
+    </div>
+    <button onclick="signOut()">Log out</button>
+  </div>
+  <div class="account-row">
+    <span id="staffAccountEmail"></span>
+    <button class="link" onclick="openPwModal()">Change password</button>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <p class="stat-label">Your conversion rate</p>
+      <div class="stat-value" id="staffRate">0%</div>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Target</p>
+      <div class="stat-value" id="staffTarget">20%</div>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Visits logged</p>
+      <div class="stat-value" id="staffVisits">0</div>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Memberships sold</p>
+      <div class="stat-value" id="staffSold">0</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head"><h2>Log today's entry</h2></div>
+    <div class="panel">
+      <div class="form-row">
+        <div class="field" style="margin:0;">
+          <label>Date</label>
+          <input type="date" id="staffEntryDate">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Non-member visits</label>
+          <input type="number" id="staffEntryVisits" min="0" step="1" placeholder="0">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Memberships sold</label>
+          <input type="number" id="staffEntrySold" min="0" step="1" placeholder="0">
+        </div>
+      </div>
+      <button class="primary" id="staffAddEntryBtn">Add entry</button>
+      <p class="error" id="staffEntryError"></p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Your recent entries</h2></div>
+    <div class="panel" style="padding: 8px 22px;">
+      <table>
+        <thead><tr><th>Date</th><th>Visits</th><th>Sold</th><th>Rate</th><th></th></tr></thead>
+        <tbody id="staffEntryTbody"></tbody>
+      </table>
+      <div class="empty hidden" id="staffEntryEmpty">No entries yet. Log your first day above.</div>
+    </div>
+  </section>
+</div>
+
+<div class="wrap hidden" id="mgmtHomeView">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <img src="data:image/webp;base64,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" alt="Sauna House logo" style="width:36px;height:auto;">
+      <div>
+        <p class="eyebrow" style="margin-bottom:4px;">Management view</p>
+        <h1 style="font-size:22px;margin:0;">Raw data</h1>
+      </div>
+    </div>
+    <button onclick="signOut()">Log out</button>
+  </div>
+  <div class="account-row">
+    <span id="mgmtAccountEmail"></span>
+    <button class="link" onclick="openPwModal()">Change password</button>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <p class="stat-label">Team conversion</p>
+      <div class="stat-value" id="mgmtTeamRate">0%</div>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Target</p>
+      <div class="stat-value">
+        <input type="number" id="mgmtTargetInput" min="1" max="100" step="1" style="width:70px;font-family:'Fraunces',serif;font-size:20px;padding:4px 8px;">%
+      </div>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Total visits</p>
+      <div class="stat-value" id="mgmtTotalVisits">0</div>
+    </div>
+    <div class="stat-card">
+      <p class="stat-label">Total sold</p>
+      <div class="stat-value" id="mgmtTotalSold">0</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Staff performance</h2>
+      <button onclick="exportCsv()">Export CSV</button>
+    </div>
+    <div class="panel" style="padding: 8px 22px;">
+      <table>
+        <thead><tr><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th></tr></thead>
+        <tbody id="mgmtStaffTbody"></tbody>
+      </table>
+      <div class="empty hidden" id="mgmtStaffEmpty">No staff added yet.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Manage staff</h2></div>
+    <div class="panel">
+      <div class="inline-row">
+        <input type="text" id="mgmtNewStaffName" placeholder="Staff name">
+        <input type="email" id="mgmtNewStaffEmail" placeholder="Staff email">
+        <button class="primary" style="width:auto;" id="mgmtAddStaffBtn">Add</button>
+      </div>
+      <p class="error" id="mgmtAddStaffError"></p>
+      <p class="notice hidden" id="mgmtAddStaffNotice"></p>
+      <div id="mgmtStaffList" style="margin-top:16px;"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>All entries</h2>
+      <span id="mgmtEntryCount" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-faint);"></span>
+    </div>
+    <div class="panel" style="padding: 8px 22px;">
+      <table>
+        <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th><th></th></tr></thead>
+        <tbody id="mgmtEntryTbody"></tbody>
+      </table>
+      <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let session = null;
+let profile = null;
+let target = 20;
+
+let logoClicks = 0;
+let logoClickTimer = null;
+function handleLogoClick() {
+  logoClicks++;
+  clearTimeout(logoClickTimer);
+  logoClickTimer = setTimeout(() => { logoClicks = 0; }, 1500);
+  if (logoClicks >= 5) {
+    logoClicks = 0;
+    showEasterEgg();
+  }
+}
+function showEasterEgg() {
+  const el = document.getElementById('easterEgg');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4500);
+}
+
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+
+function hideAll() {
+  ['signInView', 'firstSetupView', 'staffHomeView', 'mgmtHomeView'].forEach(id => document.getElementById(id).classList.add('hidden'));
+}
+
+function showSignIn() {
+  hideAll();
+  document.getElementById('signInEmail').value = '';
+  document.getElementById('signInPassword').value = '';
+  document.getElementById('signInError').textContent = '';
+  document.getElementById('signInView').classList.remove('hidden');
+}
+
+function showFirstSetup() {
+  hideAll();
+  document.getElementById('setupName').value = '';
+  document.getElementById('setupEmail').value = '';
+  document.getElementById('setupPassword').value = '';
+  document.getElementById('setupError').textContent = '';
+  document.getElementById('firstSetupView').classList.remove('hidden');
+}
+
+async function signIn() {
+  const email = document.getElementById('signInEmail').value.trim();
+  const password = document.getElementById('signInPassword').value;
+  const errEl = document.getElementById('signInError');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = 'Enter your email and password.'; return; }
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = 'Wrong email or password.'; return; }
+}
+
+async function createFirstManager() {
+  const name = document.getElementById('setupName').value.trim();
+  const email = document.getElementById('setupEmail').value.trim();
+  const password = document.getElementById('setupPassword').value;
+  const errEl = document.getElementById('setupError');
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = 'Enter your name.'; return; }
+  if (!email) { errEl.textContent = 'Enter your email.'; return; }
+  if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+  if (error) { errEl.textContent = error.message; return; }
+  if (!data.session) {
+    errEl.textContent = 'Account created, but no session started — go to Supabase Dashboard > Authentication > Providers > Email and turn off "Confirm email", then sign in normally (see README).';
+  }
+}
+
+async function signOut() {
+  await supabase.auth.signOut();
+}
+
+function openPwModal() {
+  document.getElementById('pwNew').value = '';
+  document.getElementById('pwConfirm').value = '';
+  document.getElementById('pwError').textContent = '';
+  document.getElementById('pwModalOverlay').classList.remove('hidden');
+}
+function closePwModal() { document.getElementById('pwModalOverlay').classList.add('hidden'); }
+async function savePassword() {
+  const pw = document.getElementById('pwNew').value;
+  const confirmPw = document.getElementById('pwConfirm').value;
+  const errEl = document.getElementById('pwError');
+  if (pw.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+  if (pw !== confirmPw) { errEl.textContent = 'Passwords do not match.'; return; }
+  const { error } = await supabase.auth.updateUser({ password: pw });
+  if (error) { errEl.textContent = error.message; return; }
+  closePwModal();
+}
+
+async function route() {
+  if (!session) {
+    profile = null;
+    hideAll();
+    const { data: hasManager, error } = await supabase.rpc('has_manager');
+    if (error) {
+      showSignIn();
+      document.getElementById('signInError').textContent = 'Could not reach Supabase — check config.js.';
+      return;
+    }
+    if (!hasManager) showFirstSetup(); else showSignIn();
+    return;
+  }
+
+  const { data: p, error: profileErr } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+  if (profileErr || !p) { await supabase.auth.signOut(); return; }
+  profile = p;
+
+  const { data: settingsRow } = await supabase.from('settings').select('target').eq('id', 1).single();
+  target = settingsRow ? settingsRow.target : 20;
+
+  hideAll();
+  if (profile.role === 'manager') {
+    await renderMgmtHome();
+    document.getElementById('mgmtHomeView').classList.remove('hidden');
+  } else {
+    await renderStaffHome();
+    document.getElementById('staffHomeView').classList.remove('hidden');
+  }
+}
+
+async function fetchOwnEntries() {
+  const { data, error } = await supabase
+    .from('entries')
+    .select('*')
+    .eq('staff_id', profile.id)
+    .order('date', { ascending: false });
+  return error ? [] : data;
+}
+
+async function renderStaffHome() {
+  document.getElementById('staffHomeName').textContent = profile.name;
+  document.getElementById('staffAccountEmail').textContent = session.user.email;
+
+  const rows = await fetchOwnEntries();
+  const visits = rows.reduce((a, r) => a + r.visits, 0);
+  const sold = rows.reduce((a, r) => a + r.sold, 0);
+  const rate = visits > 0 ? (sold / visits) * 100 : 0;
+  const hit = rate >= target;
+
+  document.getElementById('staffRate').textContent = rate.toFixed(1) + '%';
+  document.getElementById('staffRate').style.color = hit ? '#7FA593' : '#E07A3F';
+  document.getElementById('staffTarget').textContent = target + '%';
+  document.getElementById('staffVisits').textContent = visits;
+  document.getElementById('staffSold').textContent = sold;
+
+  const tbody = document.getElementById('staffEntryTbody');
+  const emptyEl = document.getElementById('staffEntryEmpty');
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+  } else {
+    emptyEl.classList.add('hidden');
+    tbody.innerHTML = rows.map(e => {
+      const r = e.visits > 0 ? (e.sold / e.visits) * 100 : 0;
+      const hitRow = r >= target;
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td class="num">${e.visits}</td>
+        <td class="num">${e.sold}</td>
+        <td class="rate-cell ${hitRow ? 'hit' : 'miss'}">${r.toFixed(0)}%</td>
+        <td><button class="ghost" onclick="removeStaffEntry('${e.id}')">delete</button></td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('staffEntryDate').valueAsDate = new Date();
+}
+
+async function addStaffEntry() {
+  const date = document.getElementById('staffEntryDate').value;
+  const visits = parseInt(document.getElementById('staffEntryVisits').value, 10);
+  const sold = parseInt(document.getElementById('staffEntrySold').value, 10);
+  const errEl = document.getElementById('staffEntryError');
+  if (!date) { errEl.textContent = 'Pick a date.'; return; }
+  if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
+  errEl.textContent = '';
+  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold });
+  if (error) { errEl.textContent = error.message; return; }
+  document.getElementById('staffEntryVisits').value = '';
+  document.getElementById('staffEntrySold').value = '';
+  await renderStaffHome();
+}
+
+async function removeStaffEntry(id) {
+  await supabase.from('entries').delete().eq('id', id);
+  await renderStaffHome();
+}
+
+async function renderMgmtHome() {
+  document.getElementById('mgmtAccountEmail').textContent = session.user.email;
+
+  const { data: staffList } = await supabase.from('profiles').select('*').order('name');
+  const staff = staffList || [];
+
+  const { data: entryRows } = await supabase.from('entries').select('*').order('date', { ascending: false });
+  const entries = entryRows || [];
+
+  const totalVisits = entries.reduce((a, r) => a + r.visits, 0);
+  const totalSold = entries.reduce((a, r) => a + r.sold, 0);
+  const teamRate = totalVisits > 0 ? (totalSold / totalVisits) * 100 : 0;
+  document.getElementById('mgmtTeamRate').textContent = teamRate.toFixed(1) + '%';
+  document.getElementById('mgmtTeamRate').style.color = teamRate >= target ? '#7FA593' : '#E07A3F';
+  document.getElementById('mgmtTotalVisits').textContent = totalVisits;
+  document.getElementById('mgmtTotalSold').textContent = totalSold;
+  document.getElementById('mgmtTargetInput').value = target;
+
+  const staffTbody = document.getElementById('mgmtStaffTbody');
+  const staffEmpty = document.getElementById('mgmtStaffEmpty');
+  if (!staff.length) {
+    staffTbody.innerHTML = '';
+    staffEmpty.classList.remove('hidden');
+  } else {
+    staffEmpty.classList.add('hidden');
+    staffTbody.innerHTML = staff.map(s => {
+      const rows = entries.filter(e => e.staff_id === s.id);
+      const visits = rows.reduce((a, r) => a + r.visits, 0);
+      const sold = rows.reduce((a, r) => a + r.sold, 0);
+      const rate = visits > 0 ? (sold / visits) * 100 : 0;
+      const hit = rate >= target;
+      return `<tr>
+        <td>${escapeHtml(s.name)}</td>
+        <td class="num">${visits}</td>
+        <td class="num">${sold}</td>
+        <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(1)}%</td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('mgmtStaffList').innerHTML = staff.map(s => `
+    <div class="staff-row">
+      <span style="font-size:13.5px;">${escapeHtml(s.name)} <span style="color:var(--text-faint);">${escapeHtml(s.email)}</span> ${s.role === 'manager' ? '<span class="badge">manager</span>' : ''}</span>
+      ${s.id === profile.id ? '<span style="color:var(--text-faint);font-size:12px;">(you)</span>' : `<button class="ghost" onclick="removeStaffMgmt('${s.id}')">remove</button>`}
+    </div>
+  `).join('') || `<div class="empty">No staff yet.</div>`;
+
+  const entryTbody = document.getElementById('mgmtEntryTbody');
+  const entryEmpty = document.getElementById('mgmtEntryEmpty');
+  document.getElementById('mgmtEntryCount').textContent = entries.length ? `${entries.length} entries` : '';
+  if (!entries.length) {
+    entryTbody.innerHTML = '';
+    entryEmpty.classList.remove('hidden');
+  } else {
+    entryEmpty.classList.add('hidden');
+    const staffById = Object.fromEntries(staff.map(s => [s.id, s]));
+    entryTbody.innerHTML = entries.map(e => {
+      const s = staffById[e.staff_id];
+      const rate = e.visits > 0 ? (e.sold / e.visits) * 100 : 0;
+      const hit = rate >= target;
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
+        <td class="num">${e.visits}</td>
+        <td class="num">${e.sold}</td>
+        <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
+        <td><button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  window.__mgmtEntriesCache = entries;
+  window.__mgmtStaffCache = staff;
+}
+
+async function addStaffMgmt() {
+  const nameInput = document.getElementById('mgmtNewStaffName');
+  const emailInput = document.getElementById('mgmtNewStaffEmail');
+  const errEl = document.getElementById('mgmtAddStaffError');
+  const noticeEl = document.getElementById('mgmtAddStaffNotice');
+  const name = nameInput.value.trim();
+  const email = emailInput.value.trim();
+  errEl.textContent = '';
+  noticeEl.classList.add('hidden');
+  if (!name) { errEl.textContent = 'Enter a name.'; return; }
+  if (!email) { errEl.textContent = 'Enter an email.'; return; }
+
+  const { data: { session: currentSession } } = await supabase.auth.getSession();
+  const btn = document.getElementById('mgmtAddStaffBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/.netlify/functions/create-staff', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${currentSession.access_token}`,
+      },
+      body: JSON.stringify({ name, email }),
+    });
+    const body = await res.json();
+    if (!res.ok) { errEl.textContent = body.error || 'Could not add staff member.'; return; }
+    nameInput.value = '';
+    emailInput.value = '';
+    noticeEl.textContent = `${name}'s temporary password: ${body.tempPassword} — share this with them securely. They can change it after signing in.`;
+    noticeEl.classList.remove('hidden');
+    await renderMgmtHome();
+  } catch (e) {
+    errEl.textContent = 'Network error — is the site deployed with Netlify Functions?';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function removeStaffMgmt(id) {
+  if (!confirm('Remove this person and their entries? This cannot be undone.')) return;
+  const { data: { session: currentSession } } = await supabase.auth.getSession();
+  const res = await fetch('/.netlify/functions/delete-staff', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${currentSession.access_token}`,
+    },
+    body: JSON.stringify({ staffId: id }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    alert(body.error || 'Could not remove this person.');
+    return;
+  }
+  await renderMgmtHome();
+}
+
+async function removeMgmtEntry(id) {
+  await supabase.from('entries').delete().eq('id', id);
+  await renderMgmtHome();
+}
+
+function exportCsv() {
+  const entries = window.__mgmtEntriesCache || [];
+  const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
+  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Conversion rate']];
+  [...entries].sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
+    const s = staffById[e.staff_id];
+    const rate = e.visits > 0 ? ((e.sold / e.visits) * 100).toFixed(1) : '0.0';
+    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, rate + '%']);
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'conversion-tracker-export.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Expose handlers referenced from inline HTML attributes (module scripts
+// don't put top-level functions on window automatically).
+Object.assign(window, {
+  handleLogoClick, signOut, openPwModal, closePwModal,
+  removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
+});
+
+document.getElementById('signInBtn').addEventListener('click', signIn);
+document.getElementById('signInPassword').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
+document.getElementById('setupBtn').addEventListener('click', createFirstManager);
+document.getElementById('staffAddEntryBtn').addEventListener('click', addStaffEntry);
+document.getElementById('mgmtAddStaffBtn').addEventListener('click', addStaffMgmt);
+document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
+document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
+document.getElementById('mgmtTargetInput').addEventListener('change', async e => {
+  const v = parseInt(e.target.value, 10);
+  const newTarget = isNaN(v) ? 20 : v;
+  const { error } = await supabase.from('settings').update({ target: newTarget }).eq('id', 1);
+  if (!error) target = newTarget;
+  await renderMgmtHome();
+});
+
+document.getElementById('easterEgg').addEventListener('click', () => {
+  document.getElementById('easterEgg').classList.remove('show');
+});
+
+supabase.auth.onAuthStateChange((_event, s) => {
+  session = s;
+  route();
+});
+
+supabase.auth.getSession().then(({ data }) => {
+  session = data.session;
+  route();
+});
+</script>
+</body>
+</html>

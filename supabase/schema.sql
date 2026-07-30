@@ -1,0 +1,147 @@
+-- Sauna House conversion tracker — schema, roles, and RLS policies.
+-- Run this once in the Supabase SQL editor for a fresh project.
+
+create extension if not exists pgcrypto;
+
+-- ---------------------------------------------------------------------------
+-- Tables
+-- ---------------------------------------------------------------------------
+
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  name text not null,
+  email text not null,
+  role text not null default 'staff' check (role in ('staff', 'manager')),
+  created_at timestamptz not null default now()
+);
+
+create table public.entries (
+  id uuid primary key default gen_random_uuid(),
+  staff_id uuid not null references public.profiles(id) on delete cascade,
+  date date not null,
+  visits int not null check (visits >= 0),
+  sold int not null check (sold >= 0),
+  created_at timestamptz not null default now()
+);
+
+create table public.settings (
+  id int primary key default 1 check (id = 1),
+  target int not null default 20
+);
+insert into public.settings (id, target) values (1, 20);
+
+-- ---------------------------------------------------------------------------
+-- Helper functions (security definer so they can read profiles/settings
+-- without recursing through the RLS policies defined on those tables)
+-- ---------------------------------------------------------------------------
+
+create or replace function public.is_manager()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.profiles where id = auth.uid() and role = 'manager'
+  );
+$$;
+
+create or replace function public.has_manager()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (select 1 from public.profiles where role = 'manager');
+$$;
+
+-- Exposed so the signed-out client can decide whether to show the
+-- "first-time setup" screen or a normal sign-in form.
+grant execute on function public.has_manager() to anon, authenticated;
+grant execute on function public.is_manager() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- New-user bootstrap: every auth.users row gets a matching profiles row.
+-- The very first user in the whole system becomes the manager; everyone
+-- after that defaults to staff.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, name, email, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    new.email,
+    case when public.has_manager() then 'staff' else 'manager' end
+  );
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ---------------------------------------------------------------------------
+-- Row level security
+-- ---------------------------------------------------------------------------
+
+alter table public.profiles enable row level security;
+alter table public.entries enable row level security;
+alter table public.settings enable row level security;
+
+-- profiles: readable by any signed-in user (names/roles aren't sensitive);
+-- writable only by the row owner (name) or a manager (name + role); no
+-- client-side insert policy — new rows only ever come from the trigger
+-- above or the admin API (both bypass RLS).
+create policy "profiles readable by authenticated"
+  on public.profiles for select
+  to authenticated
+  using (true);
+
+create policy "profiles updatable by owner or manager"
+  on public.profiles for update
+  to authenticated
+  using (id = auth.uid() or public.is_manager())
+  with check (id = auth.uid() or public.is_manager());
+
+create policy "profiles deletable by manager"
+  on public.profiles for delete
+  to authenticated
+  using (public.is_manager());
+
+-- entries: staff see/act on their own rows only; managers see/act on all.
+create policy "entries readable by owner or manager"
+  on public.entries for select
+  to authenticated
+  using (staff_id = auth.uid() or public.is_manager());
+
+create policy "entries insertable by owner or manager"
+  on public.entries for insert
+  to authenticated
+  with check (staff_id = auth.uid() or public.is_manager());
+
+create policy "entries deletable by owner or manager"
+  on public.entries for delete
+  to authenticated
+  using (staff_id = auth.uid() or public.is_manager());
+
+-- settings: everyone signed in can read the target; only managers can set it.
+create policy "settings readable by authenticated"
+  on public.settings for select
+  to authenticated
+  using (true);
+
+create policy "settings updatable by manager"
+  on public.settings for update
+  to authenticated
+  using (public.is_manager())
+  with check (public.is_manager());
