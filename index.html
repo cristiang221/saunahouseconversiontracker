@@ -535,6 +535,23 @@
               <div class="empty hidden" id="staffLeadsEmpty">No follow-ups yet — add people who were interested but didn't sign up.</div>
             </div>
           </section>
+
+          <section>
+            <div class="section-head">
+              <h2>Conversion funnel</h2>
+              <div style="display:flex;gap:8px;">
+                <select id="staffFunnelTypeSelect" style="width:auto;">
+                  <option value="month">By month</option>
+                  <option value="quarter">By quarter</option>
+                </select>
+                <select id="staffFunnelPeriodSelect" style="width:auto;"></select>
+              </div>
+            </div>
+            <div class="panel">
+              <div id="staffFunnelChart"></div>
+              <div class="empty hidden" id="staffFunnelEmpty">No follow-ups logged for this period yet.</div>
+            </div>
+          </section>
         </div>
 
         <div class="page hidden" id="page-mgmt-dashboard">
@@ -611,6 +628,23 @@
               <div class="empty hidden" id="mgmtLeadsEmpty">No follow-ups logged yet.</div>
             </div>
           </section>
+
+          <section>
+            <div class="section-head">
+              <h2>Conversion funnel</h2>
+              <div style="display:flex;gap:8px;">
+                <select id="mgmtFunnelTypeSelect" style="width:auto;">
+                  <option value="month">By month</option>
+                  <option value="quarter">By quarter</option>
+                </select>
+                <select id="mgmtFunnelPeriodSelect" style="width:auto;"></select>
+              </div>
+            </div>
+            <div class="panel">
+              <div id="mgmtFunnelChart"></div>
+              <div class="empty hidden" id="mgmtFunnelEmpty">No follow-ups logged for this period yet.</div>
+            </div>
+          </section>
         </div>
 
         <div class="page hidden" id="page-mgmt-team">
@@ -636,25 +670,6 @@
               <p class="error" id="mgmtAddStaffError"></p>
               <p class="notice hidden" id="mgmtAddStaffNotice"></p>
               <div id="mgmtStaffList" style="margin-top:16px;"></div>
-            </div>
-          </section>
-        </div>
-
-        <div class="page hidden" id="page-funnel">
-          <section>
-            <div class="section-head">
-              <h2>Conversion funnel</h2>
-              <div style="display:flex;gap:8px;">
-                <select id="funnelTypeSelect" style="width:auto;">
-                  <option value="month">By month</option>
-                  <option value="quarter">By quarter</option>
-                </select>
-                <select id="funnelPeriodSelect" style="width:auto;"></select>
-              </div>
-            </div>
-            <div class="panel">
-              <div id="funnelChart"></div>
-              <div class="empty hidden" id="funnelEmpty">No follow-ups logged for this period yet.</div>
             </div>
           </section>
         </div>
@@ -744,7 +759,6 @@ const NAV_ITEMS = {
     { id: 'staff-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'staff-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'staff-followups', label: 'Follow-ups', icon: 'ti-user-search' },
-    { id: 'funnel', label: 'Funnel', icon: 'ti-chart-funnel' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
   ],
@@ -753,7 +767,6 @@ const NAV_ITEMS = {
     { id: 'mgmt-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'mgmt-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
-    { id: 'funnel', label: 'Funnel', icon: 'ti-chart-funnel' },
     { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
@@ -1069,8 +1082,13 @@ async function loadFunnel() {
   renderFunnel();
 }
 
+function funnelIdPrefix() { return profile?.role === 'manager' ? 'mgmt' : 'staff'; }
+
 function populateFunnelPeriods() {
-  const sel = document.getElementById('funnelPeriodSelect');
+  const prefix = funnelIdPrefix();
+  const typeSel = document.getElementById(prefix + 'FunnelTypeSelect');
+  if (typeSel) typeSel.value = funnelType;
+  const sel = document.getElementById(prefix + 'FunnelPeriodSelect');
   const now = new Date();
   const keys = new Set(funnelLeads.map(l => periodKeyFor(l.created_at)));
   keys.add(funnelType === 'month' ? isoMonthKey(now) : isoQuarterKey(now));
@@ -1080,9 +1098,10 @@ function populateFunnelPeriods() {
 }
 
 function renderFunnel() {
+  const prefix = funnelIdPrefix();
   const inPeriod = funnelLeads.filter(l => periodKeyFor(l.created_at) === funnelPeriod);
-  const emptyEl = document.getElementById('funnelEmpty');
-  const chartEl = document.getElementById('funnelChart');
+  const emptyEl = document.getElementById(prefix + 'FunnelEmpty');
+  const chartEl = document.getElementById(prefix + 'FunnelChart');
   if (!inPeriod.length) {
     chartEl.innerHTML = '';
     emptyEl.classList.remove('hidden');
@@ -1536,15 +1555,17 @@ document.getElementById('leaderboardMonthSelect').addEventListener('change', e =
 document.getElementById('chatSendBtn').addEventListener('click', sendChatMessage);
 document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMessage(); });
 
-document.getElementById('funnelTypeSelect').addEventListener('change', e => {
-  funnelType = e.target.value;
-  funnelPeriod = null;
-  populateFunnelPeriods();
-  renderFunnel();
-});
-document.getElementById('funnelPeriodSelect').addEventListener('change', e => {
-  funnelPeriod = e.target.value;
-  renderFunnel();
+['staff', 'mgmt'].forEach(prefix => {
+  document.getElementById(prefix + 'FunnelTypeSelect').addEventListener('change', e => {
+    funnelType = e.target.value;
+    funnelPeriod = null;
+    populateFunnelPeriods();
+    renderFunnel();
+  });
+  document.getElementById(prefix + 'FunnelPeriodSelect').addEventListener('change', e => {
+    funnelPeriod = e.target.value;
+    renderFunnel();
+  });
 });
 
 supabase.auth.onAuthStateChange((event, s) => {
