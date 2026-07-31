@@ -131,6 +131,12 @@ create policy "entries insertable by owner or manager"
   to authenticated
   with check (staff_id = auth.uid() or public.is_manager());
 
+create policy "entries updatable by owner or manager"
+  on public.entries for update
+  to authenticated
+  using (staff_id = auth.uid() or public.is_manager())
+  with check (staff_id = auth.uid() or public.is_manager());
+
 create policy "entries deletable by owner or manager"
   on public.entries for delete
   to authenticated

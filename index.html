@@ -200,6 +200,24 @@
     padding: 20px;
   }
   .modal-overlay .panel { max-width: 360px; width: 100%; }
+
+  #confettiLayer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 1000;
+  }
+  .confetti-piece {
+    position: absolute;
+    top: -20px;
+    opacity: 0.9;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0.85; }
+  }
 </style>
 </head>
 <body>
@@ -213,6 +231,33 @@
   <div class="egg-emoji">🔥💧</div>
   <div class="egg-message">You've found the heat.</div>
   <div class="egg-sub">Sauna House legend, est. today. Tap anywhere to close.</div>
+</div>
+
+<div id="confettiLayer"></div>
+
+<div class="modal-overlay hidden" id="editEntryModalOverlay">
+  <div class="panel">
+    <h2 style="margin-bottom:14px;">Edit entry</h2>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="editEntryDate">
+    </div>
+    <div class="field">
+      <label>Non-member visits</label>
+      <input type="number" id="editEntryVisits" min="0" step="1">
+    </div>
+    <div class="field">
+      <label>Memberships sold</label>
+      <input type="number" id="editEntrySold" min="0" step="1">
+    </div>
+    <div class="field">
+      <label>Member name</label>
+      <input type="text" id="editEntryMemberName" placeholder="e.g. Jamie D.">
+    </div>
+    <button class="primary" id="editEntrySaveBtn">Save changes</button>
+    <button class="link" style="margin-top:12px;" id="editEntryCancelBtn">Cancel</button>
+    <p class="error" id="editEntryError"></p>
+  </div>
 </div>
 
 <div class="modal-overlay hidden" id="pwModalOverlay">
@@ -735,6 +780,7 @@ async function addStaffEntry() {
   document.getElementById('staffEntryVisits').value = '';
   document.getElementById('staffEntrySold').value = '';
   document.getElementById('staffEntryMemberName').value = '';
+  if (sold > 0) launchConfetti();
   await renderStaffHome();
 }
 
@@ -811,7 +857,7 @@ async function renderMgmtHome() {
         <td class="num">${e.sold}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
-        <td><button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
+        <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
       </tr>`;
     }).join('');
   }
@@ -882,6 +928,60 @@ async function removeMgmtEntry(id) {
   await renderMgmtHome();
 }
 
+let editingEntryId = null;
+
+function openEditEntryModal(id) {
+  const entry = (window.__mgmtEntriesCache || []).find(e => e.id === id);
+  if (!entry) return;
+  editingEntryId = id;
+  document.getElementById('editEntryDate').value = entry.date;
+  document.getElementById('editEntryVisits').value = entry.visits;
+  document.getElementById('editEntrySold').value = entry.sold;
+  document.getElementById('editEntryMemberName').value = entry.member_name || '';
+  document.getElementById('editEntryError').textContent = '';
+  document.getElementById('editEntryModalOverlay').classList.remove('hidden');
+}
+
+function closeEditEntryModal() {
+  editingEntryId = null;
+  document.getElementById('editEntryModalOverlay').classList.add('hidden');
+}
+
+async function saveEditEntry() {
+  const date = document.getElementById('editEntryDate').value;
+  const visits = parseInt(document.getElementById('editEntryVisits').value, 10);
+  const sold = parseInt(document.getElementById('editEntrySold').value, 10);
+  const memberName = document.getElementById('editEntryMemberName').value.trim();
+  const errEl = document.getElementById('editEntryError');
+  if (!date) { errEl.textContent = 'Pick a date.'; return; }
+  if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
+  if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale."; return; }
+  const { error } = await supabase
+    .from('entries')
+    .update({ date, visits, sold, member_name: memberName || null })
+    .eq('id', editingEntryId);
+  if (error) { errEl.textContent = error.message; return; }
+  closeEditEntryModal();
+  await renderMgmtHome();
+}
+
+function launchConfetti() {
+  const layer = document.getElementById('confettiLayer');
+  const colors = ['#E07A3F', '#7FA593', '#F3EDE2', '#EC8A54', '#6FC2CE'];
+  for (let i = 0; i < 60; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.width = (6 + Math.random() * 6) + 'px';
+    piece.style.height = (10 + Math.random() * 8) + 'px';
+    piece.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+    piece.style.animationDelay = (Math.random() * 0.4) + 's';
+    piece.addEventListener('animationend', () => piece.remove());
+    layer.appendChild(piece);
+  }
+}
+
 async function saveTeamNote() {
   const input = document.getElementById('mgmtNoteInput');
   const errEl = document.getElementById('mgmtNoteError');
@@ -916,6 +1016,7 @@ function exportCsv() {
 Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
+  openEditEntryModal,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -926,6 +1027,8 @@ document.getElementById('mgmtAddStaffBtn').addEventListener('click', addStaffMgm
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('mgmtSaveNoteBtn').addEventListener('click', saveTeamNote);
+document.getElementById('editEntrySaveBtn').addEventListener('click', saveEditEntry);
+document.getElementById('editEntryCancelBtn').addEventListener('click', closeEditEntryModal);
 document.getElementById('mgmtTargetInput').addEventListener('change', async e => {
   const v = parseInt(e.target.value, 10);
   const newTarget = isNaN(v) ? 20 : v;
