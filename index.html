@@ -6,7 +6,7 @@
 <title>Membership Conversion Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
 <style>
   :root {
     --bg: #1B1815;
@@ -28,10 +28,9 @@
     background: var(--bg);
     color: var(--text);
     font-family: 'Inter', sans-serif;
-    padding: 40px 24px 80px;
     min-height: 100vh;
   }
-  .wrap { max-width: 920px; margin: 0 auto; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
   .wrap.narrow { max-width: 420px; }
   header { margin-bottom: 32px; }
   .eyebrow {
@@ -240,6 +239,63 @@
   .lead-card-notes { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0; white-space: pre-wrap; word-break: break-word; }
   .lead-card-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11.5px; color: var(--text-faint); flex-wrap: wrap; }
   .badge.pending { color: var(--ember); border-color: var(--ember); }
+  .badge.done { color: var(--sage); border-color: var(--sage); }
+
+  .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
+  .app-sidebar {
+    width: 232px; flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 22px 14px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 20px; }
+  .sidebar-brand img { width: 30px; height: auto; }
+  .sidebar-brand span { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 500; }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 8px;
+    background: none; border: none;
+    color: var(--text-dim); font-family: 'Inter', sans-serif; font-size: 13.5px;
+    text-align: left; cursor: pointer; width: 100%;
+  }
+  .nav-item i { font-size: 16px; width: 18px; text-align: center; flex-shrink: 0; }
+  .nav-item:hover { border-color: transparent; background: var(--panel-raised); color: var(--text); }
+  .nav-item.active { background: var(--ember-dim); color: var(--text); }
+  .sidebar-footer {
+    border-top: 1px solid var(--line-soft);
+    padding-top: 14px; margin-top: 10px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .sidebar-footer .account-email { font-size: 11px; color: var(--text-faint); word-break: break-all; padding: 0 8px; }
+  .sidebar-footer button { width: 100%; }
+
+  .app-main { flex: 1; min-width: 0; padding: 32px 40px 60px; }
+  .app-topbar { margin-bottom: 24px; }
+  .app-topbar h1 { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 500; margin: 0; }
+  .page.hidden { display: none !important; }
+
+  @media (max-width: 860px) {
+    .app-shell { flex-direction: column; }
+    .app-sidebar {
+      width: 100%; height: auto; position: static;
+      flex-direction: row; align-items: center;
+      overflow-x: auto; padding: 12px; gap: 14px;
+    }
+    .sidebar-brand { padding: 0 4px; flex-shrink: 0; }
+    .sidebar-nav { flex-direction: row; flex: none; }
+    .nav-item span { display: none; }
+    .sidebar-footer {
+      flex-direction: row; align-items: center; margin-top: 0;
+      border-top: none; border-left: 1px solid var(--line-soft);
+      padding: 0 0 0 14px; flex-shrink: 0;
+    }
+    .sidebar-footer .account-email { display: none; }
+    .sidebar-footer button { width: auto; }
+    .app-main { padding: 20px 16px 60px; }
+  }
 </style>
 </head>
 <body>
@@ -346,250 +402,259 @@
   </div>
 </div>
 
-<div class="wrap hidden" id="staffHomeView">
-  <div class="topbar">
-    <div style="display:flex;align-items:center;gap:14px;">
-      <img src="data:image/webp;base64,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" alt="Sauna House logo" class="logo-mini" style="width:36px;height:auto;">
-      <div>
-        <p class="eyebrow" style="margin-bottom:4px;">Staff view</p>
-        <h1 id="staffHomeName" style="font-size:22px;margin:0;">—</h1>
+<div class="hidden" id="appView">
+  <div class="app-shell">
+    <nav class="app-sidebar" id="appSidebar">
+      <div class="sidebar-brand">
+        <img src="data:image/webp;base64,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" alt="Sauna House logo">
+        <span>Sauna House</span>
       </div>
-    </div>
-    <button onclick="signOut()">Log out</button>
-  </div>
-  <div class="account-row">
-    <span id="staffAccountEmail"></span>
-    <button class="link" onclick="openPwModal()">Change password</button>
-  </div>
+      <div class="sidebar-nav" id="sidebarNav"></div>
+      <div class="sidebar-footer">
+        <div class="account-email" id="sidebarAccountEmail"></div>
+        <button class="link" onclick="openPwModal()">Change password</button>
+        <button onclick="signOut()">Log out</button>
+      </div>
+    </nav>
 
-  <div class="panel hidden" id="staffNoteBanner" style="margin-bottom:24px;border-color:var(--ember-dim);">
-    <p class="stat-label" style="margin-bottom:8px;">Note from management</p>
-    <p id="staffNoteText" style="margin:0;font-size:14px;line-height:1.5;white-space:pre-wrap;"></p>
-  </div>
+    <div class="app-main">
+      <div class="app-topbar">
+        <h1 id="pageTitle">Dashboard</h1>
+      </div>
+      <div class="app-content" id="appContent">
 
-  <div class="stat-grid">
-    <div class="stat-card">
-      <p class="stat-label">Your conversion rate</p>
-      <div class="stat-value" id="staffRate">0%</div>
-    </div>
-    <div class="stat-card">
-      <p class="stat-label">Target</p>
-      <div class="stat-value" id="staffTarget">20%</div>
-    </div>
-    <div class="stat-card">
-      <p class="stat-label">Visits logged</p>
-      <div class="stat-value" id="staffVisits">0</div>
-    </div>
-    <div class="stat-card">
-      <p class="stat-label">Memberships sold</p>
-      <div class="stat-value" id="staffSold">0</div>
-    </div>
-  </div>
+        <div class="page hidden" id="page-staff-dashboard">
+          <p class="sub" id="staffHomeName" style="margin-bottom:20px;">—</p>
 
-  <section>
-    <div class="section-head"><h2>Log today's entry</h2></div>
-    <div class="panel">
-      <div class="form-row">
-        <div class="field" style="margin:0;">
-          <label>Date</label>
-          <input type="date" id="staffEntryDate">
+          <div class="panel hidden" id="staffNoteBanner" style="margin-bottom:24px;border-color:var(--ember-dim);">
+            <p class="stat-label" style="margin-bottom:8px;">Note from management</p>
+            <p id="staffNoteText" style="margin:0;font-size:14px;line-height:1.5;white-space:pre-wrap;"></p>
+          </div>
+
+          <div class="stat-grid">
+            <div class="stat-card">
+              <p class="stat-label">Your conversion rate</p>
+              <div class="stat-value" id="staffRate">0%</div>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Target</p>
+              <div class="stat-value" id="staffTarget">20%</div>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Visits logged</p>
+              <div class="stat-value" id="staffVisits">0</div>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Memberships sold</p>
+              <div class="stat-value" id="staffSold">0</div>
+            </div>
+          </div>
         </div>
-        <div class="field" style="margin:0;">
-          <label>Non-member visits</label>
-          <input type="number" id="staffEntryVisits" min="0" step="1" placeholder="0">
+
+        <div class="page hidden" id="page-staff-entries">
+          <section>
+            <div class="section-head"><h2>Log today's entry</h2></div>
+            <div class="panel">
+              <div class="form-row">
+                <div class="field" style="margin:0;">
+                  <label>Date</label>
+                  <input type="date" id="staffEntryDate">
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>Non-member visits</label>
+                  <input type="number" id="staffEntryVisits" min="0" step="1" placeholder="0">
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>Memberships sold</label>
+                  <input type="number" id="staffEntrySold" min="0" step="1" placeholder="0">
+                </div>
+              </div>
+              <div class="field">
+                <label>Member name (first name + last initial)</label>
+                <input type="text" id="staffEntryMemberName" placeholder="e.g. Jamie D.">
+              </div>
+              <button class="primary" id="staffAddEntryBtn">Add entry</button>
+              <p class="error" id="staffEntryError"></p>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Your recent entries</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Date</th><th>Visits</th><th>Sold</th><th>Rate</th><th></th></tr></thead>
+                <tbody id="staffEntryTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="staffEntryEmpty">No entries yet. Log your first day above.</div>
+            </div>
+          </section>
         </div>
-        <div class="field" style="margin:0;">
-          <label>Memberships sold</label>
-          <input type="number" id="staffEntrySold" min="0" step="1" placeholder="0">
+
+        <div class="page hidden" id="page-staff-sales">
+          <section>
+            <div class="section-head"><h2>Your sales</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Date</th><th>Member</th><th>Sold</th></tr></thead>
+                <tbody id="staffSalesTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="staffSalesEmpty">No sales logged yet.</div>
+            </div>
+          </section>
         </div>
-      </div>
-      <div class="field">
-        <label>Member name (first name + last initial)</label>
-        <input type="text" id="staffEntryMemberName" placeholder="e.g. Jamie D.">
-      </div>
-      <button class="primary" id="staffAddEntryBtn">Add entry</button>
-      <p class="error" id="staffEntryError"></p>
-    </div>
-  </section>
 
-  <section>
-    <div class="section-head"><h2>Your recent entries</h2></div>
-    <div class="panel" style="padding: 8px 22px;">
-      <table>
-        <thead><tr><th>Date</th><th>Visits</th><th>Sold</th><th>Rate</th><th></th></tr></thead>
-        <tbody id="staffEntryTbody"></tbody>
-      </table>
-      <div class="empty hidden" id="staffEntryEmpty">No entries yet. Log your first day above.</div>
-    </div>
-  </section>
+        <div class="page hidden" id="page-staff-followups">
+          <section>
+            <div class="panel">
+              <div class="inline-row">
+                <input type="text" id="leadName" placeholder="Name">
+                <input type="text" id="leadNotes" placeholder="Notes (e.g. asked about family plans)">
+                <button class="primary" style="width:auto;" id="leadAddBtn">Add</button>
+              </div>
+              <p class="error" id="leadError"></p>
+            </div>
+            <div class="panel" style="margin-top: 14px;">
+              <div id="staffLeadsList"></div>
+              <div class="empty hidden" id="staffLeadsEmpty">No follow-ups yet — add people who were interested but didn't sign up.</div>
+            </div>
+          </section>
+        </div>
 
-  <section>
-    <div class="section-head"><h2>Your sales</h2></div>
-    <div class="panel" style="padding: 8px 22px;">
-      <table>
-        <thead><tr><th>Date</th><th>Member</th><th>Sold</th></tr></thead>
-        <tbody id="staffSalesTbody"></tbody>
-      </table>
-      <div class="empty hidden" id="staffSalesEmpty">No sales logged yet.</div>
-    </div>
-  </section>
+        <div class="page hidden" id="page-mgmt-dashboard">
+          <div class="stat-grid">
+            <div class="stat-card">
+              <p class="stat-label">Team conversion</p>
+              <div class="stat-value" id="mgmtTeamRate">0%</div>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Target</p>
+              <div class="stat-value">
+                <input type="number" id="mgmtTargetInput" min="1" max="100" step="1" style="width:70px;font-family:'Fraunces',serif;font-size:20px;padding:4px 8px;">%
+              </div>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Total visits</p>
+              <div class="stat-value" id="mgmtTotalVisits">0</div>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Total sold</p>
+              <div class="stat-value" id="mgmtTotalSold">0</div>
+            </div>
+          </div>
 
-  <section>
-    <div class="section-head"><h2>Follow-ups</h2></div>
-    <div class="panel">
-      <div class="inline-row">
-        <input type="text" id="leadName" placeholder="Name">
-        <input type="text" id="leadNotes" placeholder="Notes (e.g. asked about family plans)">
-        <button class="primary" style="width:auto;" id="leadAddBtn">Add</button>
+          <section>
+            <div class="section-head"><h2>Team note</h2></div>
+            <div class="panel">
+              <div class="field" style="margin-bottom:12px;">
+                <label>Shown on every staff member's page</label>
+                <textarea id="mgmtNoteInput" rows="3" placeholder="e.g. Everyone who hits target this month gets a $50 bonus."></textarea>
+              </div>
+              <button class="primary" style="width:auto;" id="mgmtSaveNoteBtn">Save note</button>
+              <p class="error" id="mgmtNoteError"></p>
+            </div>
+          </section>
+        </div>
+
+        <div class="page hidden" id="page-mgmt-entries">
+          <section>
+            <div class="section-head">
+              <h2>All entries</h2>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span id="mgmtEntryCount" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-faint);"></span>
+                <button onclick="exportCsv()">Export CSV</button>
+              </div>
+            </div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Rate</th><th></th></tr></thead>
+                <tbody id="mgmtEntryTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="page hidden" id="page-mgmt-sales">
+          <section>
+            <div class="section-head"><h2>All sales</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th></tr></thead>
+                <tbody id="mgmtSalesTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="mgmtSalesEmpty">No sales logged yet.</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="page hidden" id="page-mgmt-followups">
+          <section>
+            <div class="panel">
+              <div id="mgmtLeadsGroups"></div>
+              <div class="empty hidden" id="mgmtLeadsEmpty">No follow-ups logged yet.</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="page hidden" id="page-mgmt-team">
+          <section>
+            <div class="section-head"><h2>Staff performance</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th></tr></thead>
+                <tbody id="mgmtStaffTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="mgmtStaffEmpty">No staff added yet.</div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Manage staff</h2></div>
+            <div class="panel">
+              <div class="inline-row">
+                <input type="text" id="mgmtNewStaffName" placeholder="Staff name">
+                <input type="email" id="mgmtNewStaffEmail" placeholder="Staff email">
+                <button class="primary" style="width:auto;" id="mgmtAddStaffBtn">Add</button>
+              </div>
+              <p class="error" id="mgmtAddStaffError"></p>
+              <p class="notice hidden" id="mgmtAddStaffNotice"></p>
+              <div id="mgmtStaffList" style="margin-top:16px;"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="page hidden" id="page-leaderboard">
+          <section>
+            <div class="section-head">
+              <h2>Leaderboard</h2>
+              <select id="leaderboardMonthSelect" style="width:auto;"></select>
+            </div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>#</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th></tr></thead>
+                <tbody id="leaderboardTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="leaderboardEmpty">No entries logged for this month yet.</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="page hidden" id="page-chat">
+          <section>
+            <div class="panel chat-box">
+              <div class="chat-messages" id="chatMessages"></div>
+              <div class="chat-input-row">
+                <input type="text" id="chatInput" placeholder="Message the team..." maxlength="2000">
+                <button class="primary" style="width:auto;" id="chatSendBtn">Send</button>
+              </div>
+              <p class="error" id="chatError"></p>
+            </div>
+          </section>
+        </div>
+
       </div>
-      <p class="error" id="leadError"></p>
     </div>
-    <div class="panel" style="margin-top: 14px;">
-      <div id="staffLeadsList"></div>
-      <div class="empty hidden" id="staffLeadsEmpty">No follow-ups yet — add people who were interested but didn't sign up.</div>
-    </div>
-  </section>
-</div>
-
-<div class="wrap hidden" id="mgmtHomeView">
-  <div class="topbar">
-    <div style="display:flex;align-items:center;gap:14px;">
-      <img src="data:image/webp;base64,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" alt="Sauna House logo" class="logo-mini" style="width:36px;height:auto;">
-      <div>
-        <p class="eyebrow" style="margin-bottom:4px;">Management view</p>
-        <h1 style="font-size:22px;margin:0;">Raw data</h1>
-      </div>
-    </div>
-    <button onclick="signOut()">Log out</button>
   </div>
-  <div class="account-row">
-    <span id="mgmtAccountEmail"></span>
-    <button class="link" onclick="openPwModal()">Change password</button>
-  </div>
-
-  <div class="stat-grid">
-    <div class="stat-card">
-      <p class="stat-label">Team conversion</p>
-      <div class="stat-value" id="mgmtTeamRate">0%</div>
-    </div>
-    <div class="stat-card">
-      <p class="stat-label">Target</p>
-      <div class="stat-value">
-        <input type="number" id="mgmtTargetInput" min="1" max="100" step="1" style="width:70px;font-family:'Fraunces',serif;font-size:20px;padding:4px 8px;">%
-      </div>
-    </div>
-    <div class="stat-card">
-      <p class="stat-label">Total visits</p>
-      <div class="stat-value" id="mgmtTotalVisits">0</div>
-    </div>
-    <div class="stat-card">
-      <p class="stat-label">Total sold</p>
-      <div class="stat-value" id="mgmtTotalSold">0</div>
-    </div>
-  </div>
-
-  <section>
-    <div class="section-head"><h2>Team note</h2></div>
-    <div class="panel">
-      <div class="field" style="margin-bottom:12px;">
-        <label>Shown on every staff member's page</label>
-        <textarea id="mgmtNoteInput" rows="3" placeholder="e.g. Everyone who hits target this month gets a $50 bonus."></textarea>
-      </div>
-      <button class="primary" style="width:auto;" id="mgmtSaveNoteBtn">Save note</button>
-      <p class="error" id="mgmtNoteError"></p>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Staff performance</h2>
-      <button onclick="exportCsv()">Export CSV</button>
-    </div>
-    <div class="panel" style="padding: 8px 22px;">
-      <table>
-        <thead><tr><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th></tr></thead>
-        <tbody id="mgmtStaffTbody"></tbody>
-      </table>
-      <div class="empty hidden" id="mgmtStaffEmpty">No staff added yet.</div>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head"><h2>Manage staff</h2></div>
-    <div class="panel">
-      <div class="inline-row">
-        <input type="text" id="mgmtNewStaffName" placeholder="Staff name">
-        <input type="email" id="mgmtNewStaffEmail" placeholder="Staff email">
-        <button class="primary" style="width:auto;" id="mgmtAddStaffBtn">Add</button>
-      </div>
-      <p class="error" id="mgmtAddStaffError"></p>
-      <p class="notice hidden" id="mgmtAddStaffNotice"></p>
-      <div id="mgmtStaffList" style="margin-top:16px;"></div>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>All entries</h2>
-      <span id="mgmtEntryCount" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-faint);"></span>
-    </div>
-    <div class="panel" style="padding: 8px 22px;">
-      <table>
-        <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Rate</th><th></th></tr></thead>
-        <tbody id="mgmtEntryTbody"></tbody>
-      </table>
-      <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head"><h2>All sales</h2></div>
-    <div class="panel" style="padding: 8px 22px;">
-      <table>
-        <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th></tr></thead>
-        <tbody id="mgmtSalesTbody"></tbody>
-      </table>
-      <div class="empty hidden" id="mgmtSalesEmpty">No sales logged yet.</div>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head"><h2>Follow-ups</h2></div>
-    <div class="panel">
-      <div id="mgmtLeadsGroups"></div>
-      <div class="empty hidden" id="mgmtLeadsEmpty">No follow-ups logged yet.</div>
-    </div>
-  </section>
-</div>
-
-<div class="wrap hidden" id="leaderboardView">
-  <section>
-    <div class="section-head">
-      <h2>Leaderboard</h2>
-      <select id="leaderboardMonthSelect" style="width:auto;"></select>
-    </div>
-    <div class="panel" style="padding: 8px 22px;">
-      <table>
-        <thead><tr><th>#</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th></tr></thead>
-        <tbody id="leaderboardTbody"></tbody>
-      </table>
-      <div class="empty hidden" id="leaderboardEmpty">No entries logged for this month yet.</div>
-    </div>
-  </section>
-</div>
-
-<div class="wrap hidden" id="chatView">
-  <section>
-    <div class="section-head"><h2>Team chat</h2></div>
-    <div class="panel chat-box">
-      <div class="chat-messages" id="chatMessages"></div>
-      <div class="chat-input-row">
-        <input type="text" id="chatInput" placeholder="Message the team..." maxlength="2000">
-        <button class="primary" style="width:auto;" id="chatSendBtn">Send</button>
-      </div>
-      <p class="error" id="chatError"></p>
-    </div>
-  </section>
 </div>
 
 <script type="module">
@@ -631,7 +696,48 @@ function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocale
 function fmtTime(iso) { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 
 function hideAll() {
-  ['signInView', 'firstSetupView', 'staffHomeView', 'mgmtHomeView', 'leaderboardView', 'chatView'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  ['signInView', 'firstSetupView', 'appView'].forEach(id => document.getElementById(id).classList.add('hidden'));
+}
+
+const NAV_ITEMS = {
+  staff: [
+    { id: 'staff-dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
+    { id: 'staff-entries', label: 'Entries', icon: 'ti-clipboard-list' },
+    { id: 'staff-sales', label: 'Sales', icon: 'ti-receipt' },
+    { id: 'staff-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
+    { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
+  ],
+  manager: [
+    { id: 'mgmt-dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
+    { id: 'mgmt-entries', label: 'Entries', icon: 'ti-clipboard-list' },
+    { id: 'mgmt-sales', label: 'Sales', icon: 'ti-receipt' },
+    { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
+    { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
+  ],
+};
+
+function buildSidebar(role) {
+  document.getElementById('sidebarNav').innerHTML = NAV_ITEMS[role].map(item => `
+    <button class="nav-item" data-page="${item.id}" onclick="showPage('${item.id}')">
+      <i class="ti ${item.icon}"></i><span>${item.label}</span>
+    </button>
+  `).join('');
+}
+
+function showPage(pageId) {
+  const items = NAV_ITEMS[profile?.role] || [];
+  if (!items.some(i => i.id === pageId)) return;
+  document.querySelectorAll('#appContent .page').forEach(p => p.classList.add('hidden'));
+  const pageEl = document.getElementById('page-' + pageId);
+  if (pageEl) pageEl.classList.remove('hidden');
+  document.querySelectorAll('#sidebarNav .nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.page === pageId);
+  });
+  const item = items.find(i => i.id === pageId);
+  document.getElementById('pageTitle').textContent = item ? item.label : '';
 }
 
 function showSignIn() {
@@ -717,24 +823,24 @@ async function route() {
   const { data: p, error: profileErr } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
   if (profileErr || !p) { await supabase.auth.signOut(); return; }
   profile = p;
+  document.getElementById('sidebarAccountEmail').textContent = session.user.email;
 
   const { data: settingsRow } = await supabase.from('settings').select('target, note').eq('id', 1).single();
   target = settingsRow ? settingsRow.target : 20;
   teamNote = settingsRow?.note || '';
 
   hideAll();
+  document.getElementById('appView').classList.remove('hidden');
+  buildSidebar(profile.role);
   if (profile.role === 'manager') {
     await renderMgmtHome();
-    document.getElementById('mgmtHomeView').classList.remove('hidden');
   } else {
     await renderStaffHome();
-    document.getElementById('staffHomeView').classList.remove('hidden');
   }
   await loadLeaderboard();
-  document.getElementById('leaderboardView').classList.remove('hidden');
   await loadChat();
-  document.getElementById('chatView').classList.remove('hidden');
   subscribeChat();
+  showPage(profile.role === 'manager' ? 'mgmt-dashboard' : 'staff-dashboard');
 }
 
 function monthLabel(key) {
@@ -920,8 +1026,7 @@ async function removeLead(id) {
 }
 
 async function renderStaffHome() {
-  document.getElementById('staffHomeName').textContent = profile.name;
-  document.getElementById('staffAccountEmail').textContent = session.user.email;
+  document.getElementById('staffHomeName').textContent = `Welcome back, ${profile.name}.`;
 
   const noteBanner = document.getElementById('staffNoteBanner');
   if (teamNote) {
@@ -1017,7 +1122,6 @@ async function removeStaffEntry(id) {
 }
 
 async function renderMgmtHome() {
-  document.getElementById('mgmtAccountEmail').textContent = session?.user?.email || '';
   document.getElementById('mgmtNoteInput').value = teamNote;
 
   const { data: staffList } = await supabase.from('profiles').select('*').order('name');
@@ -1284,7 +1388,7 @@ function exportCsv() {
 Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
-  openEditEntryModal, toggleLeadFollowedUp, removeLead,
+  openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
