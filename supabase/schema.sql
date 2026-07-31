@@ -48,6 +48,8 @@ create table public.leads (
   notes text,
   followed_up boolean not null default false,
   stage text not null default 'toured' check (stage in ('toured', 'trial', 'member')),
+  remind_at date,
+  reminder_note text,
   created_at timestamptz not null default now()
 );
 

@@ -387,6 +387,15 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="leadReminderModalOverlay">
+  <div class="panel" style="max-width:480px;">
+    <h2 style="margin-bottom:4px;">Follow-up reminders</h2>
+    <p class="sub" style="margin-bottom:16px;">You asked to be reminded about these.</p>
+    <div id="leadReminderList"></div>
+    <button class="primary" style="margin-top:16px;" id="leadReminderCloseBtn">Got it</button>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="dailyRecapModalOverlay">
   <div class="panel" style="max-width:480px;">
     <h2 style="margin-bottom:4px;">Yesterday's recap</h2>
@@ -947,6 +956,7 @@ function showEasterEgg() {
 }
 
 function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function escapeAttr(str) { return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 function fmtTime(iso) { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 function fmtMoney(n) { return (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }); }
@@ -1406,6 +1416,11 @@ function renderLeadCard(l, notes, staffName) {
       <input type="text" id="leadNoteInput-${l.id}" placeholder="Add a note..." onkeydown="if(event.key==='Enter'){addLeadNote('${l.id}')}">
       <button class="ghost" onclick="addLeadNote('${l.id}')">add note</button>
     </div>
+    <div class="inline-row" style="margin-top:8px;">
+      <input type="date" id="leadReminderDate-${l.id}" value="${escapeAttr(l.remind_at || '')}">
+      <input type="text" id="leadReminderNoteInput-${l.id}" placeholder="Reminder note (optional)" value="${escapeAttr(l.reminder_note || '')}">
+      <button class="ghost" onclick="saveLeadReminder('${l.id}')">${l.remind_at ? 'update reminder' : 'set reminder'}</button>
+    </div>
   </div>`;
 }
 
@@ -1413,6 +1428,51 @@ async function updateLeadStage(id, stage) {
   await supabase.from('leads').update({ stage }).eq('id', id);
   await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
   await loadFunnel();
+}
+
+async function saveLeadReminder(id) {
+  const dateVal = document.getElementById('leadReminderDate-' + id).value || null;
+  const noteVal = document.getElementById('leadReminderNoteInput-' + id).value.trim() || null;
+  await supabase.from('leads').update({ remind_at: dateVal, reminder_note: noteVal }).eq('id', id);
+  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+}
+
+async function snoozeLeadReminder(id) {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  await supabase.from('leads').update({ remind_at: localDateStr(d) }).eq('id', id);
+  await renderStaffHome();
+}
+
+function maybeShowLeadReminders(leads) {
+  const todayStr = localDateStr(new Date());
+  const due = leads.filter(l => !l.followed_up && l.remind_at && l.remind_at <= todayStr);
+  const overlay = document.getElementById('leadReminderModalOverlay');
+  if (!due.length) {
+    overlay.classList.add('hidden');
+    return;
+  }
+  document.getElementById('leadReminderList').innerHTML = due.map(l => `
+    <div class="lead-card">
+      <div class="lead-card-head">
+        <span class="lead-card-name">${escapeHtml(l.name)}</span>
+        <span class="badge pending">due ${fmtDate(l.remind_at)}</span>
+      </div>
+      ${l.reminder_note ? `<div class="lead-card-notes">${escapeHtml(l.reminder_note)}</div>` : ''}
+      <div class="lead-card-meta">
+        <span></span>
+        <span>
+          <button class="ghost" onclick="snoozeLeadReminder('${l.id}')">snooze 1 day</button>
+          <button class="ghost" onclick="toggleLeadFollowedUp('${l.id}', true)">mark followed up</button>
+        </span>
+      </div>
+    </div>
+  `).join('');
+  overlay.classList.remove('hidden');
+}
+
+function closeLeadReminders() {
+  document.getElementById('leadReminderModalOverlay').classList.add('hidden');
 }
 
 function isoMonthKey(d) { return d.toISOString().slice(0, 7); }
@@ -1853,6 +1913,8 @@ async function renderStaffHome() {
     leadsEmptyEl.classList.add('hidden');
     leadsListEl.innerHTML = leads.map(l => renderLeadCard(l, notesByLead[l.id])).join('');
   }
+
+  maybeShowLeadReminders(leads);
 }
 
 async function addStaffEntry() {
@@ -2173,7 +2235,7 @@ Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
   openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
-  selectDmContact,
+  selectDmContact, saveLeadReminder, snoozeLeadReminder,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -2185,6 +2247,7 @@ document.getElementById('leadAddBtn').addEventListener('click', addLead);
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('dailyRecapCloseBtn').addEventListener('click', closeDailyRecap);
+document.getElementById('leadReminderCloseBtn').addEventListener('click', closeLeadReminders);
 document.getElementById('scheduleUploadBtn').addEventListener('click', uploadSchedule);
 document.getElementById('scheduleYearInput').value = new Date().getFullYear();
 document.getElementById('mgmtSaveNoteBtn').addEventListener('click', saveTeamNote);
