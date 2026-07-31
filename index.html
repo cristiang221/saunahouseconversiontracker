@@ -387,6 +387,16 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="dailyRecapModalOverlay">
+  <div class="panel" style="max-width:480px;">
+    <h2 style="margin-bottom:4px;">Yesterday's recap</h2>
+    <p class="sub" id="dailyRecapDate" style="margin-bottom:16px;"></p>
+    <div id="dailyRecapList"></div>
+    <div class="empty hidden" id="dailyRecapEmpty">No entries logged yesterday.</div>
+    <button class="primary" style="margin-top:16px;" id="dailyRecapCloseBtn">Got it</button>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="pwModalOverlay">
   <div class="panel">
     <h2 style="margin-bottom:14px;">Change password</h2>
@@ -906,6 +916,7 @@ function escapeHtml(str) { const d = document.createElement('div'); d.textConten
 function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 function fmtTime(iso) { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 function fmtMoney(n) { return (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }); }
+function localDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
 const SOURCE_LABELS = {
   'walk-in': 'Walk-in',
@@ -1524,6 +1535,56 @@ function renderSourceBreakdown(entries) {
   }).join('');
 }
 
+function maybeShowDailyRecap(entries, staffById) {
+  const todayStr = localDateStr(new Date());
+  if (localStorage.getItem('dailyRecapDismissed') === todayStr) return;
+
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yesterdayStr = localDateStr(y);
+  document.getElementById('dailyRecapDate').textContent = fmtDate(yesterdayStr);
+
+  const rows = entries.filter(e => e.date === yesterdayStr);
+  const listEl = document.getElementById('dailyRecapList');
+  const emptyEl = document.getElementById('dailyRecapEmpty');
+  if (!rows.length) {
+    listEl.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+  } else {
+    emptyEl.classList.add('hidden');
+    const byStaff = {};
+    rows.forEach(e => {
+      const bucket = (byStaff[e.staff_id] = byStaff[e.staff_id] || { visits: 0, sold: 0, revenue: 0, names: [] });
+      bucket.visits += e.visits;
+      bucket.sold += e.sold;
+      bucket.revenue += Number(e.revenue) || 0;
+      if (e.member_name) bucket.names.push(e.member_name);
+    });
+    listEl.innerHTML = Object.entries(byStaff).map(([staffId, b]) => {
+      const name = staffById[staffId] ? staffById[staffId].name : 'Removed staff';
+      const extras = [
+        `${b.visits} visit${b.visits === 1 ? '' : 's'} logged`,
+        b.revenue > 0 ? fmtMoney(b.revenue) : null,
+        b.names.length ? `Sold to: ${b.names.join(', ')}` : null,
+      ].filter(Boolean).join(' · ');
+      return `<div class="lead-card">
+        <div class="lead-card-head">
+          <span class="lead-card-name">${escapeHtml(name)}</span>
+          <span class="badge ${b.sold > 0 ? 'done' : 'pending'}">${b.sold} sold</span>
+        </div>
+        <div class="lead-card-notes">${escapeHtml(extras)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('dailyRecapModalOverlay').classList.remove('hidden');
+}
+
+function closeDailyRecap() {
+  localStorage.setItem('dailyRecapDismissed', localDateStr(new Date()));
+  document.getElementById('dailyRecapModalOverlay').classList.add('hidden');
+}
+
 async function addLead() {
   const nameInput = document.getElementById('leadName');
   const notesInput = document.getElementById('leadNotes');
@@ -1755,6 +1816,7 @@ async function renderMgmtHome() {
   populateRevenuePeriods(entries);
   renderRevenue(entries, staff);
   renderSourceBreakdown(entries);
+  maybeShowDailyRecap(entries, staffById);
 
   window.__mgmtEntriesCache = entries;
   window.__mgmtStaffCache = staff;
@@ -1950,6 +2012,7 @@ document.getElementById('mgmtAddStaffBtn').addEventListener('click', addStaffMgm
 document.getElementById('leadAddBtn').addEventListener('click', addLead);
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
+document.getElementById('dailyRecapCloseBtn').addEventListener('click', closeDailyRecap);
 document.getElementById('mgmtSaveNoteBtn').addEventListener('click', saveTeamNote);
 document.getElementById('editEntrySaveBtn').addEventListener('click', saveEditEntry);
 document.getElementById('editEntryCancelBtn').addEventListener('click', closeEditEntryModal);
