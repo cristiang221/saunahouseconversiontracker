@@ -240,6 +240,23 @@
   .lead-card-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11.5px; color: var(--text-faint); flex-wrap: wrap; }
   .badge.pending { color: var(--ember); border-color: var(--ember); }
   .badge.done { color: var(--sage); border-color: var(--sage); }
+  .lead-stage-select { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 6px; }
+
+  .funnel-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; }
+  .funnel-row-label {
+    width: 64px; flex-shrink: 0;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint);
+  }
+  .funnel-row-bar-track { flex: 1; background: var(--panel-raised); border-radius: 8px; height: 30px; overflow: hidden; }
+  .funnel-row-bar {
+    height: 100%; min-width: 4px;
+    background: linear-gradient(90deg, var(--ember-dim), var(--ember));
+    border-radius: 8px;
+    transition: width 0.3s ease;
+  }
+  .funnel-row-value { width: 150px; flex-shrink: 0; text-align: right; font-family: 'Fraunces', serif; font-size: 17px; }
+  .funnel-row-pct { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); margin-left: 4px; }
 
   .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
   .app-sidebar {
@@ -623,6 +640,25 @@
           </section>
         </div>
 
+        <div class="page hidden" id="page-funnel">
+          <section>
+            <div class="section-head">
+              <h2>Conversion funnel</h2>
+              <div style="display:flex;gap:8px;">
+                <select id="funnelTypeSelect" style="width:auto;">
+                  <option value="month">By month</option>
+                  <option value="quarter">By quarter</option>
+                </select>
+                <select id="funnelPeriodSelect" style="width:auto;"></select>
+              </div>
+            </div>
+            <div class="panel">
+              <div id="funnelChart"></div>
+              <div class="empty hidden" id="funnelEmpty">No follow-ups logged for this period yet.</div>
+            </div>
+          </section>
+        </div>
+
         <div class="page hidden" id="page-leaderboard">
           <section>
             <div class="section-head">
@@ -673,6 +709,9 @@ let leaderboardProfiles = [];
 let leaderboardMonth = null;
 let profilesById = {};
 let chatChannel = null;
+let funnelLeads = [];
+let funnelType = 'month';
+let funnelPeriod = null;
 
 let logoClicks = 0;
 let logoClickTimer = null;
@@ -705,6 +744,7 @@ const NAV_ITEMS = {
     { id: 'staff-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'staff-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'staff-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'funnel', label: 'Funnel', icon: 'ti-chart-funnel' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
   ],
@@ -713,6 +753,7 @@ const NAV_ITEMS = {
     { id: 'mgmt-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'mgmt-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'funnel', label: 'Funnel', icon: 'ti-chart-funnel' },
     { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
@@ -840,6 +881,7 @@ async function route() {
   await loadLeaderboard();
   await loadChat();
   subscribeChat();
+  await loadFunnel();
   showPage(profile.role === 'manager' ? 'mgmt-dashboard' : 'staff-dashboard');
 }
 
@@ -984,10 +1026,16 @@ function renderLeadCard(l, staffName) {
   const badge = l.followed_up
     ? '<span class="badge done">followed up</span>'
     : '<span class="badge pending">needs follow-up</span>';
+  const stageOptions = ['toured', 'trial', 'member']
+    .map(s => `<option value="${s}" ${l.stage === s ? 'selected' : ''}>${s[0].toUpperCase()}${s.slice(1)}</option>`)
+    .join('');
   return `<div class="lead-card">
     <div class="lead-card-head">
       <span class="lead-card-name">${escapeHtml(l.name)}${staffName ? ` <span style="color:var(--text-faint);font-weight:400;">— ${escapeHtml(staffName)}</span>` : ''}</span>
-      ${badge}
+      <span style="display:flex;align-items:center;gap:8px;">
+        <select class="lead-stage-select" onchange="updateLeadStage('${l.id}', this.value)">${stageOptions}</select>
+        ${badge}
+      </span>
     </div>
     ${l.notes ? `<div class="lead-card-notes">${escapeHtml(l.notes)}</div>` : ''}
     <div class="lead-card-meta">
@@ -998,6 +1046,72 @@ function renderLeadCard(l, staffName) {
       </span>
     </div>
   </div>`;
+}
+
+async function updateLeadStage(id, stage) {
+  await supabase.from('leads').update({ stage }).eq('id', id);
+  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+  await loadFunnel();
+}
+
+function isoMonthKey(d) { return d.toISOString().slice(0, 7); }
+function isoQuarterKey(d) { return `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`; }
+function quarterLabel(key) { const [y, q] = key.split('-Q'); return `${q} ${y}`; }
+function periodKeyFor(dateStr) {
+  const d = new Date(dateStr);
+  return funnelType === 'month' ? isoMonthKey(d) : isoQuarterKey(d);
+}
+
+async function loadFunnel() {
+  const { data, error } = await supabase.from('leads').select('created_at, stage').order('created_at', { ascending: true });
+  funnelLeads = error ? [] : data;
+  populateFunnelPeriods();
+  renderFunnel();
+}
+
+function populateFunnelPeriods() {
+  const sel = document.getElementById('funnelPeriodSelect');
+  const now = new Date();
+  const keys = new Set(funnelLeads.map(l => periodKeyFor(l.created_at)));
+  keys.add(funnelType === 'month' ? isoMonthKey(now) : isoQuarterKey(now));
+  const sorted = [...keys].sort().reverse();
+  if (!funnelPeriod || !sorted.includes(funnelPeriod)) funnelPeriod = sorted[0];
+  sel.innerHTML = sorted.map(k => `<option value="${k}" ${k === funnelPeriod ? 'selected' : ''}>${funnelType === 'month' ? monthLabel(k) : quarterLabel(k)}</option>`).join('');
+}
+
+function renderFunnel() {
+  const inPeriod = funnelLeads.filter(l => periodKeyFor(l.created_at) === funnelPeriod);
+  const emptyEl = document.getElementById('funnelEmpty');
+  const chartEl = document.getElementById('funnelChart');
+  if (!inPeriod.length) {
+    chartEl.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  const counts = {
+    toured: inPeriod.length,
+    trial: inPeriod.filter(l => l.stage === 'trial' || l.stage === 'member').length,
+    member: inPeriod.filter(l => l.stage === 'member').length,
+  };
+  const stages = [
+    { key: 'toured', label: 'Toured' },
+    { key: 'trial', label: 'Trial' },
+    { key: 'member', label: 'Member' },
+  ];
+  const max = counts.toured || 1;
+  chartEl.innerHTML = stages.map((s, i) => {
+    const value = counts[s.key];
+    const pct = (value / max) * 100;
+    const prev = i > 0 ? counts[stages[i - 1].key] : null;
+    const convPct = (i > 0 && prev > 0) ? `<span class="funnel-row-pct">${Math.round((value / prev) * 100)}% of ${stages[i - 1].label.toLowerCase()}</span>` : '';
+    return `<div class="funnel-row">
+      <div class="funnel-row-label">${s.label}</div>
+      <div class="funnel-row-bar-track"><div class="funnel-row-bar" style="width:${pct}%;"></div></div>
+      <div class="funnel-row-value">${value} ${convPct}</div>
+    </div>`;
+  }).join('');
 }
 
 async function addLead() {
@@ -1388,7 +1502,7 @@ function exportCsv() {
 Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
-  openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage,
+  openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -1422,11 +1536,26 @@ document.getElementById('leaderboardMonthSelect').addEventListener('change', e =
 document.getElementById('chatSendBtn').addEventListener('click', sendChatMessage);
 document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMessage(); });
 
-supabase.auth.onAuthStateChange((_event, s) => {
+document.getElementById('funnelTypeSelect').addEventListener('change', e => {
+  funnelType = e.target.value;
+  funnelPeriod = null;
+  populateFunnelPeriods();
+  renderFunnel();
+});
+document.getElementById('funnelPeriodSelect').addEventListener('change', e => {
+  funnelPeriod = e.target.value;
+  renderFunnel();
+});
+
+supabase.auth.onAuthStateChange((event, s) => {
   session = s;
-if (routing) return;
+  // Token refreshes and other housekeeping events fire periodically and
+  // shouldn't reset the user's current page back to the dashboard.
+  if (!['SIGNED_IN', 'SIGNED_OUT', 'INITIAL_SESSION'].includes(event)) return;
+  if (routing) return;
   routing = true;
-  route().finally(() => { routing = false; });});
+  route().finally(() => { routing = false; });
+});
 
 </script>
 </body>

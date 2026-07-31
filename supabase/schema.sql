@@ -45,6 +45,7 @@ create table public.leads (
   name text not null,
   notes text,
   followed_up boolean not null default false,
+  stage text not null default 'toured' check (stage in ('toured', 'trial', 'member')),
   created_at timestamptz not null default now()
 );
 
