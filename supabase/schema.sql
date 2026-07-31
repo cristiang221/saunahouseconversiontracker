@@ -23,6 +23,7 @@ create table public.entries (
   sold int not null check (sold >= 0),
   member_name text,
   revenue numeric(10, 2) check (revenue >= 0),
+  source text check (source in ('walk-in', 'referral', 'social', 'google', 'event', 'other')),
   created_at timestamptz not null default now()
 );
 
@@ -47,6 +48,22 @@ create table public.leads (
   notes text,
   followed_up boolean not null default false,
   stage text not null default 'toured' check (stage in ('toured', 'trial', 'member')),
+  created_at timestamptz not null default now()
+);
+
+create table public.lead_notes (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  staff_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(btrim(body)) > 0 and char_length(body) <= 2000),
+  created_at timestamptz not null default now()
+);
+
+create table public.direct_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(btrim(body)) > 0 and char_length(body) <= 2000),
   created_at timestamptz not null default now()
 );
 
@@ -119,6 +136,8 @@ alter table public.entries enable row level security;
 alter table public.settings enable row level security;
 alter table public.messages enable row level security;
 alter table public.leads enable row level security;
+alter table public.lead_notes enable row level security;
+alter table public.direct_messages enable row level security;
 
 -- profiles: readable by any signed-in user (names/roles aren't sensitive);
 -- writable only by the row owner (name) or a manager (name + role); no
@@ -211,6 +230,54 @@ create policy "leads deletable by owner or manager"
   on public.leads for delete
   to authenticated
   using (staff_id = auth.uid() or public.is_manager());
+
+-- lead_notes: an append-only log per lead. Visibility follows the parent
+-- lead's owner (or a manager), not who authored the individual note — a
+-- manager can see and add to notes on anyone's lead.
+create policy "lead_notes readable by lead owner or manager"
+  on public.lead_notes for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.leads l
+      where l.id = lead_notes.lead_id
+        and (l.staff_id = auth.uid() or public.is_manager())
+    )
+  );
+
+create policy "lead_notes insertable by lead owner or manager"
+  on public.lead_notes for insert
+  to authenticated
+  with check (
+    staff_id = auth.uid()
+    and exists (
+      select 1 from public.leads l
+      where l.id = lead_notes.lead_id
+        and (l.staff_id = auth.uid() or public.is_manager())
+    )
+  );
+
+-- direct_messages: private manager <-> staff threads. Enforced at the DB
+-- level, not just the UI — an insert is only allowed when either the
+-- sender or the recipient is a manager, so staff can never message
+-- each other directly.
+create policy "direct_messages readable by sender or recipient"
+  on public.direct_messages for select
+  to authenticated
+  using (sender_id = auth.uid() or recipient_id = auth.uid());
+
+create policy "direct_messages insertable manager or to manager"
+  on public.direct_messages for insert
+  to authenticated
+  with check (
+    sender_id = auth.uid()
+    and (
+      public.is_manager()
+      or exists (select 1 from public.profiles p where p.id = recipient_id and p.role = 'manager')
+    )
+  );
+
+alter publication supabase_realtime add table public.direct_messages;
 
 -- ---------------------------------------------------------------------------
 -- Leaderboard: per-staff, per-month totals for everyone, visible to any

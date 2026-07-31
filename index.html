@@ -238,6 +238,10 @@
   .lead-card-name { font-size: 14px; font-weight: 500; }
   .lead-card-notes { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0; white-space: pre-wrap; word-break: break-word; }
   .lead-card-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11.5px; color: var(--text-faint); flex-wrap: wrap; }
+  .lead-notes-list { margin-top: 10px; }
+  .lead-note-entry { background: var(--panel-raised); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+  .lead-note-meta { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-faint); margin-bottom: 3px; }
+  .lead-note-body { font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
   .badge.pending { color: var(--ember); border-color: var(--ember); }
   .badge.done { color: var(--sage); border-color: var(--sage); }
   .lead-stage-select { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 6px; }
@@ -257,6 +261,18 @@
   }
   .funnel-row-value { width: 150px; flex-shrink: 0; text-align: right; font-family: 'Fraunces', serif; font-size: 17px; }
   .funnel-row-pct { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); margin-left: 4px; }
+
+  .report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .report-card { display: flex; flex-direction: column; gap: 10px; }
+  .report-card h3 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 15.5px; margin: 0; }
+  .report-card p { font-size: 12.5px; color: var(--text-faint); margin: 0; line-height: 1.5; flex: 1; }
+  .report-card button { width: auto; align-self: flex-start; }
+
+  .dm-shell { display: flex; gap: 20px; align-items: flex-start; }
+  .dm-contacts { width: 220px; flex-shrink: 0; }
+  .dm-contact { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
+  .dm-contact.active { background: var(--ember-dim); border-color: var(--ember-dim); }
+  .dm-thread-wrap { flex: 1; min-width: 0; }
 
   .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
   .app-sidebar {
@@ -352,6 +368,18 @@
     <div class="field">
       <label>Sale amount ($)</label>
       <input type="number" id="editEntryRevenue" min="0" step="0.01">
+    </div>
+    <div class="field">
+      <label>Source</label>
+      <select id="editEntrySource">
+        <option value="">Not specified</option>
+        <option value="walk-in">Walk-in</option>
+        <option value="referral">Referral</option>
+        <option value="social">Social media</option>
+        <option value="google">Google / search</option>
+        <option value="event">Event</option>
+        <option value="other">Other</option>
+      </select>
     </div>
     <button class="primary" id="editEntrySaveBtn">Save changes</button>
     <button class="link" style="margin-top:12px;" id="editEntryCancelBtn">Cancel</button>
@@ -498,6 +526,18 @@
                 <label>Sale amount ($)</label>
                 <input type="number" id="staffEntryRevenue" min="0" step="0.01" placeholder="e.g. 89">
               </div>
+              <div class="field">
+                <label>Source (where they came from)</label>
+                <select id="staffEntrySource">
+                  <option value="">Not specified</option>
+                  <option value="walk-in">Walk-in</option>
+                  <option value="referral">Referral</option>
+                  <option value="social">Social media</option>
+                  <option value="google">Google / search</option>
+                  <option value="event">Event</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
               <button class="primary" id="staffAddEntryBtn">Add entry</button>
               <p class="error" id="staffEntryError"></p>
             </div>
@@ -612,7 +652,7 @@
             </div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Revenue</th><th>Rate</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Revenue</th><th>Source</th><th>Rate</th><th></th></tr></thead>
                 <tbody id="mgmtEntryTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
@@ -721,6 +761,50 @@
           </section>
         </div>
 
+        <div class="page hidden" id="page-mgmt-reports">
+          <section>
+            <div class="section-head"><h2>Reports</h2></div>
+            <div class="report-grid">
+              <div class="panel report-card">
+                <h3>All entries</h3>
+                <p>Every logged day, by staff member, with member name, revenue, and source. Exportable as CSV.</p>
+                <button onclick="showPage('mgmt-entries')">View</button>
+              </div>
+              <div class="panel report-card">
+                <h3>Revenue</h3>
+                <p>Total revenue, sold count, and average sale value by month, quarter, or year, broken down per staff member.</p>
+                <button onclick="showPage('mgmt-sales')">View</button>
+              </div>
+              <div class="panel report-card">
+                <h3>Conversion funnel</h3>
+                <p>How many follow-ups made it from toured to trial to member, by month or quarter.</p>
+                <button onclick="showPage('mgmt-followups')">View</button>
+              </div>
+              <div class="panel report-card">
+                <h3>Leaderboard</h3>
+                <p>Staff ranked by memberships sold, by month.</p>
+                <button onclick="showPage('leaderboard')">View</button>
+              </div>
+              <div class="panel report-card">
+                <h3>Staff performance</h3>
+                <p>Lifetime visits, sold, revenue, and conversion rate per staff member.</p>
+                <button onclick="showPage('mgmt-team')">View</button>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Source breakdown</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Source</th><th>Visits</th><th>Sold</th><th>Revenue</th><th>Rate</th></tr></thead>
+                <tbody id="reportsSourceTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="reportsSourceEmpty">No entries logged yet.</div>
+            </div>
+          </section>
+        </div>
+
         <div class="page hidden" id="page-leaderboard">
           <section>
             <div class="section-head">
@@ -750,6 +834,27 @@
           </section>
         </div>
 
+        <div class="page hidden" id="page-dms">
+          <section>
+            <div class="section-head"><h2 id="dmThreadTitle">Messages</h2></div>
+            <div class="dm-shell">
+              <div class="panel dm-contacts hidden" id="dmContactsPanel">
+                <div id="dmContactsList"></div>
+              </div>
+              <div class="dm-thread-wrap">
+                <div class="panel chat-box">
+                  <div class="chat-messages" id="dmMessages"></div>
+                  <div class="chat-input-row">
+                    <input type="text" id="dmInput" placeholder="Message..." maxlength="2000">
+                    <button class="primary" style="width:auto;" id="dmSendBtn">Send</button>
+                  </div>
+                  <p class="error" id="dmError"></p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
       </div>
     </div>
   </div>
@@ -771,6 +876,9 @@ let leaderboardProfiles = [];
 let leaderboardMonth = null;
 let profilesById = {};
 let chatChannel = null;
+let dmChannel = null;
+let dmRecipientId = null;
+let dmRecipientName = '';
 let funnelLeads = [];
 let funnelType = 'month';
 let funnelPeriod = null;
@@ -799,6 +907,16 @@ function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocale
 function fmtTime(iso) { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 function fmtMoney(n) { return (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }); }
 
+const SOURCE_LABELS = {
+  'walk-in': 'Walk-in',
+  referral: 'Referral',
+  social: 'Social media',
+  google: 'Google / search',
+  event: 'Event',
+  other: 'Other',
+};
+function sourceLabel(source) { return source ? (SOURCE_LABELS[source] || source) : 'Not specified'; }
+
 function hideAll() {
   ['signInView', 'firstSetupView', 'appView'].forEach(id => document.getElementById(id).classList.add('hidden'));
 }
@@ -810,6 +928,7 @@ const NAV_ITEMS = {
     { id: 'staff-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'staff-followups', label: 'Follow-ups', icon: 'ti-user-search' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
+    { id: 'dms', label: 'Messages', icon: 'ti-mail' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
   ],
   manager: [
@@ -818,7 +937,9 @@ const NAV_ITEMS = {
     { id: 'mgmt-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
     { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
+    { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
+    { id: 'dms', label: 'Messages', icon: 'ti-mail' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
   ],
 };
@@ -913,6 +1034,7 @@ async function route() {
   if (!session) {
     profile = null;
     unsubscribeChat();
+    unsubscribeDMs();
     hideAll();
     const { data: hasManager, error } = await supabase.rpc('has_manager');
     if (error) {
@@ -945,6 +1067,8 @@ async function route() {
   await loadChat();
   subscribeChat();
   await loadFunnel();
+  await loadDMs();
+  subscribeDMs();
   showPage(profile.role === 'manager' ? 'mgmt-dashboard' : 'staff-dashboard');
 }
 
@@ -1066,6 +1190,104 @@ function unsubscribeChat() {
   }
 }
 
+function selectDmContact(staffId) {
+  const s = (window.__mgmtStaffCache || []).find(x => x.id === staffId);
+  dmRecipientId = staffId;
+  dmRecipientName = s ? s.name : '';
+  loadDMs();
+}
+
+async function loadDMs() {
+  const contactsPanel = document.getElementById('dmContactsPanel');
+  if (profile.role === 'manager') {
+    contactsPanel.classList.remove('hidden');
+    const staffList = (window.__mgmtStaffCache || []).filter(s => s.role !== 'manager');
+    document.getElementById('dmContactsList').innerHTML = staffList.map(s => `
+      <button class="ghost dm-contact ${s.id === dmRecipientId ? 'active' : ''}" onclick="selectDmContact('${s.id}')">${escapeHtml(s.name)}</button>
+    `).join('') || '<div class="empty">No staff yet.</div>';
+    if (!dmRecipientId && staffList.length) {
+      dmRecipientId = staffList[0].id;
+      dmRecipientName = staffList[0].name;
+    }
+    document.getElementById('dmThreadTitle').textContent = dmRecipientId ? `Message ${dmRecipientName}` : 'Messages';
+  } else {
+    contactsPanel.classList.add('hidden');
+    if (!dmRecipientId) {
+      const { data } = await supabase.from('profiles').select('id, name').eq('role', 'manager').limit(1).maybeSingle();
+      dmRecipientId = data?.id || null;
+      dmRecipientName = data?.name || 'management';
+    }
+    document.getElementById('dmThreadTitle').textContent = dmRecipientId ? `Message ${dmRecipientName}` : 'Messages';
+  }
+  await loadDMThread();
+}
+
+async function loadDMThread() {
+  const container = document.getElementById('dmMessages');
+  container.innerHTML = '';
+  if (!dmRecipientId) return;
+  const { data, error } = await supabase
+    .from('direct_messages')
+    .select('id, body, created_at, sender_id, recipient_id')
+    .or(`and(sender_id.eq.${profile.id},recipient_id.eq.${dmRecipientId}),and(sender_id.eq.${dmRecipientId},recipient_id.eq.${profile.id})`)
+    .order('created_at', { ascending: true })
+    .limit(200);
+  if (!error && data) data.forEach(m => appendDmMessage(m));
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendDmMessage(m) {
+  const container = document.getElementById('dmMessages');
+  const mine = m.sender_id === profile.id;
+  const el = document.createElement('div');
+  el.className = 'chat-msg';
+  el.innerHTML = `
+    <div class="chat-msg-head">
+      <span class="chat-msg-name">${mine ? 'You' : escapeHtml(dmRecipientName)}</span>
+      <span class="chat-msg-time">${fmtTime(m.created_at)}</span>
+    </div>
+    <div class="chat-msg-body">${escapeHtml(m.body)}</div>
+  `;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendDmMessage() {
+  const input = document.getElementById('dmInput');
+  const errEl = document.getElementById('dmError');
+  const body = input.value.trim();
+  if (!body) return;
+  if (!dmRecipientId) { errEl.textContent = 'No recipient available.'; return; }
+  errEl.textContent = '';
+  const { error } = await supabase.from('direct_messages').insert({ sender_id: profile.id, recipient_id: dmRecipientId, body });
+  if (error) { errEl.textContent = error.message; return; }
+  input.value = '';
+}
+
+function subscribeDMs() {
+  if (dmChannel) return;
+  dmChannel = supabase
+    .channel('direct-messages-realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, payload => {
+      const m = payload.new;
+      const isThisThread = dmRecipientId && (
+        (m.sender_id === profile.id && m.recipient_id === dmRecipientId) ||
+        (m.sender_id === dmRecipientId && m.recipient_id === profile.id)
+      );
+      if (isThisThread) appendDmMessage(m);
+    })
+    .subscribe();
+}
+
+function unsubscribeDMs() {
+  if (dmChannel) {
+    supabase.removeChannel(dmChannel);
+    dmChannel = null;
+  }
+  dmRecipientId = null;
+  dmRecipientName = '';
+}
+
 async function fetchOwnEntries() {
   const { data, error } = await supabase
     .from('entries')
@@ -1085,13 +1307,38 @@ async function fetchOwnLeads() {
   return error ? [] : data;
 }
 
-function renderLeadCard(l, staffName) {
+async function fetchLeadNotesByLead() {
+  const { data, error } = await supabase
+    .from('lead_notes')
+    .select('id, lead_id, staff_id, body, created_at, profiles(name)')
+    .order('created_at', { ascending: true });
+  const byLead = {};
+  (error ? [] : data).forEach(n => { (byLead[n.lead_id] = byLead[n.lead_id] || []).push(n); });
+  return byLead;
+}
+
+async function addLeadNote(leadId) {
+  const input = document.getElementById('leadNoteInput-' + leadId);
+  const body = input.value.trim();
+  if (!body) return;
+  const { error } = await supabase.from('lead_notes').insert({ lead_id: leadId, staff_id: profile.id, body });
+  if (error) { alert(error.message); return; }
+  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+}
+
+function renderLeadCard(l, notes, staffName) {
   const badge = l.followed_up
     ? '<span class="badge done">followed up</span>'
     : '<span class="badge pending">needs follow-up</span>';
   const stageOptions = ['toured', 'trial', 'member']
     .map(s => `<option value="${s}" ${l.stage === s ? 'selected' : ''}>${s[0].toUpperCase()}${s.slice(1)}</option>`)
     .join('');
+  const noteRows = (notes || []).map(n => `
+    <div class="lead-note-entry">
+      <div class="lead-note-meta">${escapeHtml(fmtTime(n.created_at))}${n.profiles?.name ? ' · ' + escapeHtml(n.profiles.name) : ''}</div>
+      <div class="lead-note-body">${escapeHtml(n.body)}</div>
+    </div>
+  `).join('');
   return `<div class="lead-card">
     <div class="lead-card-head">
       <span class="lead-card-name">${escapeHtml(l.name)}${staffName ? ` <span style="color:var(--text-faint);font-weight:400;">— ${escapeHtml(staffName)}</span>` : ''}</span>
@@ -1107,6 +1354,11 @@ function renderLeadCard(l, staffName) {
         <button class="ghost" onclick="toggleLeadFollowedUp('${l.id}', ${!l.followed_up})">${l.followed_up ? 'mark pending' : 'mark followed up'}</button>
         <button class="ghost" onclick="removeLead('${l.id}')">delete</button>
       </span>
+    </div>
+    <div class="lead-notes-list">${noteRows}</div>
+    <div class="inline-row" style="margin-top:8px;">
+      <input type="text" id="leadNoteInput-${l.id}" placeholder="Add a note..." onkeydown="if(event.key==='Enter'){addLeadNote('${l.id}')}">
+      <button class="ghost" onclick="addLeadNote('${l.id}')">add note</button>
     </div>
   </div>`;
 }
@@ -1236,6 +1488,42 @@ function renderRevenue(entries, staff) {
   </tr>`).join('');
 }
 
+function renderSourceBreakdown(entries) {
+  const tbody = document.getElementById('reportsSourceTbody');
+  const emptyEl = document.getElementById('reportsSourceEmpty');
+  if (!entries.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  const bySource = {};
+  entries.forEach(e => {
+    const key = e.source || '__none__';
+    const bucket = (bySource[key] = bySource[key] || { visits: 0, sold: 0, revenue: 0 });
+    bucket.visits += e.visits;
+    bucket.sold += e.sold;
+    bucket.revenue += Number(e.revenue) || 0;
+  });
+
+  const rows = Object.entries(bySource)
+    .map(([key, b]) => ({ label: key === '__none__' ? 'Not specified' : sourceLabel(key), ...b }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  tbody.innerHTML = rows.map(r => {
+    const rate = r.visits > 0 ? (r.sold / r.visits) * 100 : 0;
+    const hit = rate >= target;
+    return `<tr>
+      <td>${escapeHtml(r.label)}</td>
+      <td class="num">${r.visits}</td>
+      <td class="num">${r.sold}</td>
+      <td class="num">${fmtMoney(r.revenue)}</td>
+      <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+}
+
 async function addLead() {
   const nameInput = document.getElementById('leadName');
   const notesInput = document.getElementById('leadNotes');
@@ -1323,6 +1611,7 @@ async function renderStaffHome() {
   document.getElementById('staffEntryDate').valueAsDate = new Date();
 
   const leads = await fetchOwnLeads();
+  const notesByLead = await fetchLeadNotesByLead();
   const leadsListEl = document.getElementById('staffLeadsList');
   const leadsEmptyEl = document.getElementById('staffLeadsEmpty');
   if (!leads.length) {
@@ -1330,7 +1619,7 @@ async function renderStaffHome() {
     leadsEmptyEl.classList.remove('hidden');
   } else {
     leadsEmptyEl.classList.add('hidden');
-    leadsListEl.innerHTML = leads.map(l => renderLeadCard(l)).join('');
+    leadsListEl.innerHTML = leads.map(l => renderLeadCard(l, notesByLead[l.id])).join('');
   }
 }
 
@@ -1341,18 +1630,20 @@ async function addStaffEntry() {
   const memberName = document.getElementById('staffEntryMemberName').value.trim();
   const revenueInput = document.getElementById('staffEntryRevenue').value;
   const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
+  const source = document.getElementById('staffEntrySource').value || null;
   const errEl = document.getElementById('staffEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
   if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale (first name + last initial)."; return; }
   if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
   errEl.textContent = '';
-  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold, member_name: memberName || null, revenue });
+  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold, member_name: memberName || null, revenue, source });
   if (error) { errEl.textContent = error.message; return; }
   document.getElementById('staffEntryVisits').value = '';
   document.getElementById('staffEntrySold').value = '';
   document.getElementById('staffEntryMemberName').value = '';
   document.getElementById('staffEntryRevenue').value = '';
+  document.getElementById('staffEntrySource').value = '';
   if (sold > 0) launchConfetti();
   await renderStaffHome();
 }
@@ -1434,6 +1725,7 @@ async function renderMgmtHome() {
         <td class="num">${e.sold}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
+        <td>${escapeHtml(sourceLabel(e.source))}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
         <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
       </tr>`;
@@ -1462,12 +1754,14 @@ async function renderMgmtHome() {
 
   populateRevenuePeriods(entries);
   renderRevenue(entries, staff);
+  renderSourceBreakdown(entries);
 
   window.__mgmtEntriesCache = entries;
   window.__mgmtStaffCache = staff;
 
   const { data: leadRows } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
   const leads = leadRows || [];
+  const notesByLead = await fetchLeadNotesByLead();
   const leadsByStaff = {};
   leads.forEach(l => { (leadsByStaff[l.staff_id] = leadsByStaff[l.staff_id] || []).push(l); });
 
@@ -1482,7 +1776,7 @@ async function renderMgmtHome() {
     leadsGroupsEl.innerHTML = staffWithLeads.map(s => `
       <div class="lead-group">
         <p class="stat-label lead-group-heading">${escapeHtml(s.name)}</p>
-        ${leadsByStaff[s.id].map(l => renderLeadCard(l)).join('')}
+        ${leadsByStaff[s.id].map(l => renderLeadCard(l, notesByLead[l.id])).join('')}
       </div>
     `).join('');
   }
@@ -1561,6 +1855,7 @@ function openEditEntryModal(id) {
   document.getElementById('editEntrySold').value = entry.sold;
   document.getElementById('editEntryMemberName').value = entry.member_name || '';
   document.getElementById('editEntryRevenue').value = entry.revenue != null ? entry.revenue : '';
+  document.getElementById('editEntrySource').value = entry.source || '';
   document.getElementById('editEntryError').textContent = '';
   document.getElementById('editEntryModalOverlay').classList.remove('hidden');
 }
@@ -1577,6 +1872,7 @@ async function saveEditEntry() {
   const memberName = document.getElementById('editEntryMemberName').value.trim();
   const revenueInput = document.getElementById('editEntryRevenue').value;
   const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
+  const source = document.getElementById('editEntrySource').value || null;
   const errEl = document.getElementById('editEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
@@ -1584,7 +1880,7 @@ async function saveEditEntry() {
   if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
   const { error } = await supabase
     .from('entries')
-    .update({ date, visits, sold, member_name: memberName || null, revenue })
+    .update({ date, visits, sold, member_name: memberName || null, revenue, source })
     .eq('id', editingEntryId);
   if (error) { errEl.textContent = error.message; return; }
   closeEditEntryModal();
@@ -1621,11 +1917,11 @@ async function saveTeamNote() {
 function exportCsv() {
   const entries = window.__mgmtEntriesCache || [];
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
-  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name', 'Revenue', 'Conversion rate']];
+  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name', 'Revenue', 'Source', 'Conversion rate']];
   [...entries].sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
     const s = staffById[e.staff_id];
     const rate = e.visits > 0 ? ((e.sold / e.visits) * 100).toFixed(1) : '0.0';
-    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || '', e.revenue != null ? e.revenue : '', rate + '%']);
+    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || '', e.revenue != null ? e.revenue : '', sourceLabel(e.source), rate + '%']);
   });
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -1642,7 +1938,8 @@ function exportCsv() {
 Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
-  openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage,
+  openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
+  selectDmContact,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -1675,6 +1972,9 @@ document.getElementById('leaderboardMonthSelect').addEventListener('change', e =
 
 document.getElementById('chatSendBtn').addEventListener('click', sendChatMessage);
 document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMessage(); });
+
+document.getElementById('dmSendBtn').addEventListener('click', sendDmMessage);
+document.getElementById('dmInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendDmMessage(); });
 
 ['staff', 'mgmt'].forEach(prefix => {
   document.getElementById(prefix + 'FunnelTypeSelect').addEventListener('change', e => {
