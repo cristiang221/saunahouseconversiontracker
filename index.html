@@ -67,7 +67,7 @@
     color: var(--text-faint);
     margin-bottom: 6px;
   }
-  select, input[type="text"], input[type="number"], input[type="date"], input[type="password"], input[type="email"], textarea {
+  select, input[type="text"], input[type="number"], input[type="date"], input[type="password"], input[type="email"], input[type="file"], textarea {
     width: 100%;
     background: var(--panel-raised);
     border: 1px solid var(--line);
@@ -613,6 +613,11 @@
         </div>
 
         <div class="page hidden" id="page-mgmt-dashboard">
+          <div class="panel hidden" id="scheduleAlertBanner" style="margin-bottom:24px;border-color:var(--danger);">
+            <p class="stat-label" style="margin-bottom:8px;color:var(--danger);">Missed trackers today</p>
+            <p id="scheduleAlertText" style="margin:0;font-size:14px;line-height:1.5;"></p>
+          </div>
+
           <div class="stat-grid">
             <div class="stat-card">
               <p class="stat-label">Team conversion</p>
@@ -815,6 +820,34 @@
           </section>
         </div>
 
+        <div class="page hidden" id="page-mgmt-schedule">
+          <section>
+            <div class="section-head"><h2>Upload schedule</h2></div>
+            <div class="panel">
+              <p class="sub" style="margin-bottom:12px;">
+                CSV with two columns: <strong>email</strong> and <strong>date</strong> (YYYY-MM-DD) — one row per staff member per scheduled day. Re-uploading adds to what's already there; it won't remove existing scheduled days.
+              </p>
+              <div class="inline-row">
+                <input type="file" id="scheduleFileInput" accept=".csv">
+                <button class="primary" style="width:auto;" id="scheduleUploadBtn">Upload</button>
+              </div>
+              <p class="error" id="scheduleUploadError"></p>
+              <p class="notice hidden" id="scheduleUploadNotice"></p>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Missed tracker days this month</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Date</th><th>Staff</th></tr></thead>
+                <tbody id="scheduleMissedTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="scheduleMissedEmpty">No missed tracker days for scheduled staff this month.</div>
+            </div>
+          </section>
+        </div>
+
         <div class="page hidden" id="page-leaderboard">
           <section>
             <div class="section-head">
@@ -949,6 +982,7 @@ const NAV_ITEMS = {
     { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
     { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
     { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
+    { id: 'mgmt-schedule', label: 'Schedule', icon: 'ti-calendar' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
     { id: 'dms', label: 'Messages', icon: 'ti-mail' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
@@ -1581,6 +1615,89 @@ function closeDailyRecap() {
   document.getElementById('dailyRecapModalOverlay').classList.add('hidden');
 }
 
+async function renderScheduleAndAlert(entries, staffById) {
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const todayStr = localDateStr(now);
+
+  const { data: scheduleRows, error } = await supabase
+    .from('schedule')
+    .select('staff_id, date')
+    .gte('date', monthStart)
+    .lte('date', todayStr);
+
+  const rows = error ? [] : (scheduleRows || []);
+  const entryKeySet = new Set(entries.map(e => `${e.staff_id}|${e.date}`));
+  const missed = rows
+    .filter(r => !entryKeySet.has(`${r.staff_id}|${r.date}`))
+    .map(r => ({ date: r.date, name: staffById[r.staff_id] ? staffById[r.staff_id].name : 'Removed staff' }))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
+
+  const tbody = document.getElementById('scheduleMissedTbody');
+  const emptyEl = document.getElementById('scheduleMissedEmpty');
+  if (!missed.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+  } else {
+    emptyEl.classList.add('hidden');
+    tbody.innerHTML = missed.map(m => `<tr><td>${fmtDate(m.date)}</td><td>${escapeHtml(m.name)}</td></tr>`).join('');
+  }
+
+  const missedToday = missed.filter(m => m.date === todayStr);
+  const banner = document.getElementById('scheduleAlertBanner');
+  if (missedToday.length) {
+    document.getElementById('scheduleAlertText').textContent =
+      `${missedToday.length} scheduled staff haven't logged today's tracker yet: ${missedToday.map(m => m.name).join(', ')}.`;
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+async function uploadSchedule() {
+  const fileInput = document.getElementById('scheduleFileInput');
+  const errEl = document.getElementById('scheduleUploadError');
+  const noticeEl = document.getElementById('scheduleUploadNotice');
+  errEl.textContent = '';
+  noticeEl.classList.add('hidden');
+
+  const file = fileInput.files[0];
+  if (!file) { errEl.textContent = 'Choose a CSV file first.'; return; }
+
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) { errEl.textContent = 'File is empty.'; return; }
+
+  let dataLines = lines;
+  if (/^email\s*,\s*date$/i.test(lines[0])) dataLines = lines.slice(1);
+
+  const staffByEmail = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.email.toLowerCase(), s]));
+  const rows = [];
+  let skipped = 0;
+  dataLines.forEach(line => {
+    const [emailRaw, dateRaw] = line.split(',').map(v => (v || '').trim());
+    const staff = emailRaw ? staffByEmail[emailRaw.toLowerCase()] : null;
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw || '');
+    if (staff && validDate) {
+      rows.push({ staff_id: staff.id, date: dateRaw });
+    } else {
+      skipped++;
+    }
+  });
+
+  if (!rows.length) { errEl.textContent = 'No valid rows found — check the email and date columns.'; return; }
+
+  const { error } = await supabase.from('schedule').upsert(rows, { onConflict: 'staff_id,date' });
+  if (error) { errEl.textContent = error.message; return; }
+
+  noticeEl.textContent = `${rows.length} scheduled day${rows.length === 1 ? '' : 's'} saved.${skipped ? ` ${skipped} row(s) skipped (unknown email or bad date).` : ''}`;
+  noticeEl.classList.remove('hidden');
+  fileInput.value = '';
+
+  const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
+  await renderScheduleAndAlert(window.__mgmtEntriesCache || [], staffById);
+}
+
 async function addLead() {
   const nameInput = document.getElementById('leadName');
   const notesInput = document.getElementById('leadNotes');
@@ -1813,6 +1930,7 @@ async function renderMgmtHome() {
   renderRevenue(entries, staff);
   renderSourceBreakdown(entries);
   maybeShowDailyRecap(entries, staffById);
+  await renderScheduleAndAlert(entries, staffById);
 
   window.__mgmtEntriesCache = entries;
   window.__mgmtStaffCache = staff;
@@ -2009,6 +2127,7 @@ document.getElementById('leadAddBtn').addEventListener('click', addLead);
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('dailyRecapCloseBtn').addEventListener('click', closeDailyRecap);
+document.getElementById('scheduleUploadBtn').addEventListener('click', uploadSchedule);
 document.getElementById('mgmtSaveNoteBtn').addEventListener('click', saveTeamNote);
 document.getElementById('editEntrySaveBtn').addEventListener('click', saveEditEntry);
 document.getElementById('editEntryCancelBtn').addEventListener('click', closeEditEntryModal);

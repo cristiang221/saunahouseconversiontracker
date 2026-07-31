@@ -67,6 +67,14 @@ create table public.direct_messages (
   created_at timestamptz not null default now()
 );
 
+create table public.schedule (
+  id uuid primary key default gen_random_uuid(),
+  staff_id uuid not null references public.profiles(id) on delete cascade,
+  date date not null,
+  created_at timestamptz not null default now(),
+  unique (staff_id, date)
+);
+
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so they can read profiles/settings
 -- without recursing through the RLS policies defined on those tables)
@@ -138,6 +146,7 @@ alter table public.messages enable row level security;
 alter table public.leads enable row level security;
 alter table public.lead_notes enable row level security;
 alter table public.direct_messages enable row level security;
+alter table public.schedule enable row level security;
 
 -- profiles: readable by any signed-in user (names/roles aren't sensitive);
 -- writable only by the row owner (name) or a manager (name + role); no
@@ -278,6 +287,30 @@ create policy "direct_messages insertable manager or to manager"
   );
 
 alter publication supabase_realtime add table public.direct_messages;
+
+-- schedule: manager-only compliance tool (who's scheduled to work which
+-- days, used to flag staff who didn't log a tracker entry). Staff never
+-- read or write this table.
+create policy "schedule readable by manager"
+  on public.schedule for select
+  to authenticated
+  using (public.is_manager());
+
+create policy "schedule insertable by manager"
+  on public.schedule for insert
+  to authenticated
+  with check (public.is_manager());
+
+create policy "schedule updatable by manager"
+  on public.schedule for update
+  to authenticated
+  using (public.is_manager())
+  with check (public.is_manager());
+
+create policy "schedule deletable by manager"
+  on public.schedule for delete
+  to authenticated
+  using (public.is_manager());
 
 -- ---------------------------------------------------------------------------
 -- Leaderboard: per-staff, per-month totals for everyone, visible to any
