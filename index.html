@@ -297,6 +297,13 @@
   .nav-item i { font-size: 16px; width: 18px; text-align: center; flex-shrink: 0; }
   .nav-item:hover { border-color: transparent; background: var(--panel-raised); color: var(--text); }
   .nav-item.active { background: var(--ember-dim); color: var(--text); }
+  .nav-badge {
+    margin-left: auto; flex-shrink: 0;
+    background: var(--danger); color: #fff;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+    border-radius: 999px; min-width: 16px; height: 16px; line-height: 16px;
+    text-align: center; padding: 0 4px;
+  }
   .sidebar-footer {
     border-top: 1px solid var(--line-soft);
     padding-top: 14px; margin-top: 10px;
@@ -319,7 +326,9 @@
     }
     .sidebar-brand { padding: 0 4px; flex-shrink: 0; }
     .sidebar-nav { flex-direction: row; flex: none; }
-    .nav-item span { display: none; }
+    .nav-item > span:not(.nav-badge) { display: none; }
+    .nav-item { position: relative; }
+    .nav-item .nav-badge { position: absolute; top: 2px; right: 2px; margin-left: 0; }
     .sidebar-footer {
       flex-direction: row; align-items: center; margin-top: 0;
       border-top: none; border-left: 1px solid var(--line-soft);
@@ -406,6 +415,19 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="nameModalOverlay">
+  <div class="panel">
+    <h2 style="margin-bottom:14px;">Change display name</h2>
+    <div class="field">
+      <label>Name shown to others (leaderboard, chat, entries)</label>
+      <input type="text" id="nameInput" placeholder="e.g. Jordan">
+    </div>
+    <button class="primary" id="nameSaveBtn">Save name</button>
+    <button class="link" style="margin-top:12px;" id="nameCancelBtn">Cancel</button>
+    <p class="error" id="nameError"></p>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="pwModalOverlay">
   <div class="panel">
     <h2 style="margin-bottom:14px;">Change password</h2>
@@ -480,6 +502,7 @@
       <div class="sidebar-nav" id="sidebarNav"></div>
       <div class="sidebar-footer">
         <div class="account-email" id="sidebarAccountEmail"></div>
+        <button class="link" onclick="openNameModal()">Change name</button>
         <button class="link" onclick="openPwModal()">Change password</button>
         <button onclick="signOut()">Log out</button>
       </div>
@@ -932,6 +955,8 @@ let chatChannel = null;
 let dmChannel = null;
 let dmRecipientId = null;
 let dmRecipientName = '';
+let unreadChatCount = 0;
+let unreadDmsCount = 0;
 let funnelLeads = [];
 let funnelType = 'month';
 let funnelPeriod = null;
@@ -1004,8 +1029,19 @@ function buildSidebar(role) {
   document.getElementById('sidebarNav').innerHTML = NAV_ITEMS[role].map(item => `
     <button class="nav-item" data-page="${item.id}" onclick="showPage('${item.id}')">
       <i class="ti ${item.icon}"></i><span>${item.label}</span>
+      <span class="nav-badge hidden" id="navBadge-${item.id}"></span>
     </button>
   `).join('');
+  updateNavBadges();
+}
+
+function updateNavBadges() {
+  [['chat', unreadChatCount], ['dms', unreadDmsCount]].forEach(([id, count]) => {
+    const badge = document.getElementById('navBadge-' + id);
+    if (!badge) return;
+    if (count > 0) { badge.textContent = String(count); badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+  });
 }
 
 function showPage(pageId) {
@@ -1019,6 +1055,8 @@ function showPage(pageId) {
   });
   const item = items.find(i => i.id === pageId);
   document.getElementById('pageTitle').textContent = item ? item.label : '';
+  if (pageId === 'chat') { unreadChatCount = 0; updateNavBadges(); }
+  if (pageId === 'dms') { unreadDmsCount = 0; updateNavBadges(); }
 }
 
 function showSignIn() {
@@ -1084,6 +1122,24 @@ async function savePassword() {
   const { error } = await supabase.auth.updateUser({ password: pw });
   if (error) { errEl.textContent = error.message; return; }
   closePwModal();
+}
+
+function openNameModal() {
+  document.getElementById('nameInput').value = profile ? profile.name : '';
+  document.getElementById('nameError').textContent = '';
+  document.getElementById('nameModalOverlay').classList.remove('hidden');
+}
+function closeNameModal() { document.getElementById('nameModalOverlay').classList.add('hidden'); }
+async function saveName() {
+  const name = document.getElementById('nameInput').value.trim();
+  const errEl = document.getElementById('nameError');
+  if (!name) { errEl.textContent = 'Enter a name.'; return; }
+  const { error } = await supabase.from('profiles').update({ name }).eq('id', profile.id);
+  if (error) { errEl.textContent = error.message; return; }
+  profile.name = name;
+  closeNameModal();
+  await loadLeaderboard();
+  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
 }
 
 async function route() {
@@ -1234,12 +1290,21 @@ function subscribeChat() {
   chatChannel = supabase
     .channel('messages-realtime')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-      appendChatMessage(payload.new);
+      const m = payload.new;
+      const chatPageEl = document.getElementById('page-chat');
+      const chatPageActive = chatPageEl && !chatPageEl.classList.contains('hidden');
+      if (chatPageActive) {
+        appendChatMessage(m);
+      } else if (m.sender_id !== profile?.id) {
+        unreadChatCount++;
+        updateNavBadges();
+      }
     })
     .subscribe();
 }
 
 function unsubscribeChat() {
+  unreadChatCount = 0;
   if (chatChannel) {
     supabase.removeChannel(chatChannel);
     chatChannel = null;
@@ -1326,16 +1391,26 @@ function subscribeDMs() {
     .channel('direct-messages-realtime')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, payload => {
       const m = payload.new;
+      const involvesMe = m.sender_id === profile?.id || m.recipient_id === profile?.id;
+      if (!involvesMe) return;
       const isThisThread = dmRecipientId && (
         (m.sender_id === profile.id && m.recipient_id === dmRecipientId) ||
         (m.sender_id === dmRecipientId && m.recipient_id === profile.id)
       );
-      if (isThisThread) appendDmMessage(m);
+      const dmsPageEl = document.getElementById('page-dms');
+      const dmsPageActive = dmsPageEl && !dmsPageEl.classList.contains('hidden');
+      if (isThisThread && dmsPageActive) {
+        appendDmMessage(m);
+      } else if (m.sender_id !== profile.id) {
+        unreadDmsCount++;
+        updateNavBadges();
+      }
     })
     .subscribe();
 }
 
 function unsubscribeDMs() {
+  unreadDmsCount = 0;
   if (dmChannel) {
     supabase.removeChannel(dmChannel);
     dmChannel = null;
@@ -2235,7 +2310,7 @@ Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
   openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
-  selectDmContact, saveLeadReminder, snoozeLeadReminder,
+  selectDmContact, saveLeadReminder, snoozeLeadReminder, openNameModal,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -2246,6 +2321,8 @@ document.getElementById('mgmtAddStaffBtn').addEventListener('click', addStaffMgm
 document.getElementById('leadAddBtn').addEventListener('click', addLead);
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
+document.getElementById('nameSaveBtn').addEventListener('click', saveName);
+document.getElementById('nameCancelBtn').addEventListener('click', closeNameModal);
 document.getElementById('dailyRecapCloseBtn').addEventListener('click', closeDailyRecap);
 document.getElementById('leadReminderCloseBtn').addEventListener('click', closeLeadReminders);
 document.getElementById('scheduleUploadBtn').addEventListener('click', uploadSchedule);
