@@ -77,6 +77,22 @@ create table public.schedule (
   unique (staff_id, date)
 );
 
+-- entry_audit_log: a record of manager edits/deletes on entries, for
+-- accountability if a number is later disputed. Deliberately has no
+-- foreign key to entries(id) — a delete's whole point is that the
+-- entries row is gone, so this stores a standalone snapshot instead of
+-- something that could cascade away with it.
+create table public.entry_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  entry_id uuid not null,
+  entry_date date not null,
+  entry_staff_id uuid references public.profiles(id) on delete set null,
+  action text not null check (action in ('update', 'delete')),
+  changed_by uuid references public.profiles(id) on delete set null,
+  summary text not null,
+  created_at timestamptz not null default now()
+);
+
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so they can read profiles/settings
 -- without recursing through the RLS policies defined on those tables)
@@ -149,6 +165,7 @@ alter table public.leads enable row level security;
 alter table public.lead_notes enable row level security;
 alter table public.direct_messages enable row level security;
 alter table public.schedule enable row level security;
+alter table public.entry_audit_log enable row level security;
 
 -- profiles: readable by any signed-in user (names/roles aren't sensitive);
 -- writable only by the row owner (name) or a manager (name + role); no
@@ -313,6 +330,19 @@ create policy "schedule deletable by manager"
   on public.schedule for delete
   to authenticated
   using (public.is_manager());
+
+-- entry_audit_log: manager-only, both directions. No update/delete
+-- policy at all — like messages, this is meant to be a permanent,
+-- tamper-proof record once written.
+create policy "entry_audit_log readable by manager"
+  on public.entry_audit_log for select
+  to authenticated
+  using (public.is_manager());
+
+create policy "entry_audit_log insertable by manager"
+  on public.entry_audit_log for insert
+  to authenticated
+  with check (public.is_manager() and changed_by = auth.uid());
 
 -- ---------------------------------------------------------------------------
 -- Leaderboard: per-staff, per-month totals for everyone, visible to any

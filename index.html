@@ -750,6 +750,35 @@
                 <button onclick="exportCsv()">Export CSV</button>
               </div>
             </div>
+            <div class="panel" style="margin-bottom:14px;">
+              <div class="form-row" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+                <div class="field" style="margin:0;">
+                  <label>Staff</label>
+                  <select id="entryFilterStaff"><option value="">All staff</option></select>
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>From</label>
+                  <input type="date" id="entryFilterFrom">
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>To</label>
+                  <input type="date" id="entryFilterTo">
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>Source</label>
+                  <select id="entryFilterSource">
+                    <option value="">All sources</option>
+                    <option value="walk-in">Walk-in</option>
+                    <option value="referral">Referral</option>
+                    <option value="social">Social media</option>
+                    <option value="google">Google / search</option>
+                    <option value="event">Event</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <button class="link" id="entryFilterClearBtn">Clear filters</button>
+            </div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
                 <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Revenue</th><th>Source</th><th>Rate</th><th></th></tr></thead>
@@ -763,6 +792,23 @@
         <div class="page hidden" id="page-mgmt-sales">
           <section>
             <div class="section-head"><h2>All sales</h2></div>
+            <div class="panel" style="margin-bottom:14px;">
+              <div class="form-row" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div class="field" style="margin:0;">
+                  <label>Staff</label>
+                  <select id="salesFilterStaff"><option value="">All staff</option></select>
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>From</label>
+                  <input type="date" id="salesFilterFrom">
+                </div>
+                <div class="field" style="margin:0;">
+                  <label>To</label>
+                  <input type="date" id="salesFilterTo">
+                </div>
+              </div>
+              <button class="link" id="salesFilterClearBtn">Clear filters</button>
+            </div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
                 <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th><th>Revenue</th></tr></thead>
@@ -903,6 +949,29 @@
               <div class="empty hidden" id="reportsSourceEmpty">No entries logged yet.</div>
             </div>
           </section>
+
+          <section>
+            <div class="section-head"><h2>Trends (last 30 days)</h2></div>
+            <div class="panel" style="margin-bottom:14px;">
+              <p class="stat-label" style="margin-bottom:10px;">Daily revenue</p>
+              <div id="revenueTrendChart"></div>
+            </div>
+            <div class="panel">
+              <p class="stat-label" style="margin-bottom:10px;">Daily conversion rate</p>
+              <div id="rateTrendChart"></div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Edit history</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>When</th><th>Entry date</th><th>Staff</th><th>Changed by</th><th>Action</th><th>Change</th></tr></thead>
+                <tbody id="auditLogTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="auditLogEmpty">No edits or deletions logged yet.</div>
+            </div>
+          </section>
         </div>
 
         <div class="page hidden" id="page-mgmt-schedule">
@@ -1015,6 +1084,8 @@ let funnelType = 'month';
 let funnelPeriod = null;
 let revenueType = 'month';
 let revenuePeriod = null;
+let entryFilters = { staffId: '', from: '', to: '', source: '' };
+let salesFilters = { staffId: '', from: '', to: '' };
 
 let logoClicks = 0;
 let logoClickTimer = null;
@@ -1722,6 +1793,94 @@ function renderRevenue(entries, staff) {
   </tr>`).join('');
 }
 
+function computeDailySeries(entries, days) {
+  const byDate = {};
+  entries.forEach(e => {
+    const bucket = (byDate[e.date] = byDate[e.date] || { visits: 0, sold: 0, revenue: 0 });
+    bucket.visits += e.visits;
+    bucket.sold += e.sold;
+    bucket.revenue += Number(e.revenue) || 0;
+  });
+  const series = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = localDateStr(d);
+    const b = byDate[key] || { visits: 0, sold: 0, revenue: 0 };
+    series.push({
+      date: key,
+      label: fmtDate(key),
+      revenue: b.revenue,
+      rate: b.visits > 0 ? (b.sold / b.visits) * 100 : 0,
+    });
+  }
+  return series;
+}
+
+function renderLineChart(containerId, series, valueKey, color, formatValue) {
+  const container = document.getElementById(containerId);
+  const width = 700, height = 160, pad = { top: 10, right: 10, bottom: 22, left: 6 };
+  const values = series.map(p => p[valueKey]);
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = (max - min) || 1;
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const stepX = series.length > 1 ? innerW / (series.length - 1) : 0;
+
+  const coords = series.map((p, i) => [
+    pad.left + i * stepX,
+    pad.top + innerH - ((p[valueKey] - min) / range) * innerH,
+  ]);
+  const linePath = coords.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+  const areaPath = `${linePath} L${coords[coords.length - 1][0].toFixed(1)},${(pad.top + innerH).toFixed(1)} L${coords[0][0].toFixed(1)},${(pad.top + innerH).toFixed(1)} Z`;
+  const labelEvery = Math.max(1, Math.ceil(series.length / 6));
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;display:block;">
+      <path d="${areaPath}" fill="${color}" opacity="0.14" stroke="none"></path>
+      <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2"></path>
+      ${coords.map(c => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.2" fill="${color}"></circle>`).join('')}
+      ${series.map((p, i) => i % labelEvery === 0
+        ? `<text x="${coords[i][0].toFixed(1)}" y="${height - 4}" font-size="9" fill="#7C7364" text-anchor="middle" font-family="JetBrains Mono, monospace">${escapeHtml(p.label)}</text>`
+        : '').join('')}
+    </svg>
+    <p class="sub" style="margin-top:6px;">Latest: ${formatValue(series[series.length - 1][valueKey])} · Peak: ${formatValue(max)}</p>
+  `;
+}
+
+function renderTrends(entries) {
+  const series = computeDailySeries(entries, 30);
+  renderLineChart('revenueTrendChart', series, 'revenue', '#E07A3F', v => fmtMoney(v));
+  renderLineChart('rateTrendChart', series, 'rate', '#7FA593', v => v.toFixed(1) + '%');
+}
+
+async function renderAuditLog() {
+  const { data, error } = await supabase
+    .from('entry_audit_log')
+    .select('id, entry_date, action, summary, created_at, entry_staff:profiles!entry_staff_id(name), changed_by_profile:profiles!changed_by(name)')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  const rows = error ? [] : (data || []);
+  const tbody = document.getElementById('auditLogTbody');
+  const emptyEl = document.getElementById('auditLogEmpty');
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>${fmtTime(r.created_at)}</td>
+    <td>${fmtDate(r.entry_date)}</td>
+    <td>${escapeHtml(r.entry_staff ? r.entry_staff.name : 'Removed staff')}</td>
+    <td>${escapeHtml(r.changed_by_profile ? r.changed_by_profile.name : 'Removed user')}</td>
+    <td>${r.action === 'delete' ? '<span class="badge pending">deleted</span>' : '<span class="badge">edited</span>'}</td>
+    <td>${escapeHtml(r.summary)}</td>
+  </tr>`).join('');
+}
+
 function renderSourceBreakdown(entries) {
   const tbody = document.getElementById('reportsSourceTbody');
   const emptyEl = document.getElementById('reportsSourceEmpty');
@@ -1756,6 +1915,88 @@ function renderSourceBreakdown(entries) {
       <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(1)}%</td>
     </tr>`;
   }).join('');
+}
+
+function applyEntryFilters(entries) {
+  return entries.filter(e => {
+    if (entryFilters.staffId && e.staff_id !== entryFilters.staffId) return false;
+    if (entryFilters.from && e.date < entryFilters.from) return false;
+    if (entryFilters.to && e.date > entryFilters.to) return false;
+    if (entryFilters.source && e.source !== entryFilters.source) return false;
+    return true;
+  });
+}
+
+function applySalesFilters(entries) {
+  return entries.filter(e => {
+    if (e.sold <= 0) return false;
+    if (salesFilters.staffId && e.staff_id !== salesFilters.staffId) return false;
+    if (salesFilters.from && e.date < salesFilters.from) return false;
+    if (salesFilters.to && e.date > salesFilters.to) return false;
+    return true;
+  });
+}
+
+function renderEntriesTable() {
+  const allEntries = window.__mgmtEntriesCache || [];
+  const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
+  const entries = applyEntryFilters(allEntries);
+
+  const entryTbody = document.getElementById('mgmtEntryTbody');
+  const entryEmpty = document.getElementById('mgmtEntryEmpty');
+  const countLabel = entries.length === allEntries.length
+    ? (entries.length ? `${entries.length} entries` : '')
+    : `${entries.length} of ${allEntries.length} entries`;
+  document.getElementById('mgmtEntryCount').textContent = countLabel;
+  if (!entries.length) {
+    entryTbody.innerHTML = '';
+    entryEmpty.classList.remove('hidden');
+    entryEmpty.textContent = allEntries.length ? 'No entries match these filters.' : 'No entries logged yet.';
+  } else {
+    entryEmpty.classList.add('hidden');
+    entryTbody.innerHTML = entries.map(e => {
+      const s = staffById[e.staff_id];
+      const rate = e.visits > 0 ? (e.sold / e.visits) * 100 : 0;
+      const hit = rate >= target;
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
+        <td class="num">${e.visits}</td>
+        <td class="num">${e.sold}</td>
+        <td>${escapeHtml(e.member_name || '—')}</td>
+        <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
+        <td>${escapeHtml(sourceLabel(e.source))}</td>
+        <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
+        <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function renderSalesTable() {
+  const allSales = (window.__mgmtEntriesCache || []).filter(e => e.sold > 0);
+  const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
+  const sales = applySalesFilters(window.__mgmtEntriesCache || []);
+
+  const salesTbody = document.getElementById('mgmtSalesTbody');
+  const salesEmpty = document.getElementById('mgmtSalesEmpty');
+  if (!sales.length) {
+    salesTbody.innerHTML = '';
+    salesEmpty.classList.remove('hidden');
+    salesEmpty.textContent = allSales.length ? 'No sales match these filters.' : 'No sales logged yet.';
+  } else {
+    salesEmpty.classList.add('hidden');
+    salesTbody.innerHTML = sales.map(e => {
+      const s = staffById[e.staff_id];
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
+        <td>${escapeHtml(e.member_name || '—')}</td>
+        <td class="num">${e.sold}</td>
+        <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
+      </tr>`;
+    }).join('');
+  }
 }
 
 function maybeShowDailyRecap(entries, staffById) {
@@ -2083,6 +2324,8 @@ async function renderMgmtHome() {
 
   const { data: entryRows } = await supabase.from('entries').select('*').order('date', { ascending: false });
   const entries = entryRows || [];
+  window.__mgmtEntriesCache = entries;
+  window.__mgmtStaffCache = staff;
 
   const totalVisits = entries.reduce((a, r) => a + r.visits, 0);
   const totalSold = entries.reduce((a, r) => a + r.sold, 0);
@@ -2128,60 +2371,31 @@ async function renderMgmtHome() {
 
   const staffById = Object.fromEntries(staff.map(s => [s.id, s]));
 
-  const entryTbody = document.getElementById('mgmtEntryTbody');
-  const entryEmpty = document.getElementById('mgmtEntryEmpty');
-  document.getElementById('mgmtEntryCount').textContent = entries.length ? `${entries.length} entries` : '';
-  if (!entries.length) {
-    entryTbody.innerHTML = '';
-    entryEmpty.classList.remove('hidden');
-  } else {
-    entryEmpty.classList.add('hidden');
-    entryTbody.innerHTML = entries.map(e => {
-      const s = staffById[e.staff_id];
-      const rate = e.visits > 0 ? (e.sold / e.visits) * 100 : 0;
-      const hit = rate >= target;
-      return `<tr>
-        <td>${fmtDate(e.date)}</td>
-        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
-        <td class="num">${e.visits}</td>
-        <td class="num">${e.sold}</td>
-        <td>${escapeHtml(e.member_name || '—')}</td>
-        <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
-        <td>${escapeHtml(sourceLabel(e.source))}</td>
-        <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
-        <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
-      </tr>`;
-    }).join('');
+  const staffFilterOptions = `<option value="">All staff</option>` +
+    staff.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  const entryFilterStaffEl = document.getElementById('entryFilterStaff');
+  const salesFilterStaffEl = document.getElementById('salesFilterStaff');
+  if (entryFilterStaffEl.innerHTML !== staffFilterOptions) {
+    const cur = entryFilterStaffEl.value;
+    entryFilterStaffEl.innerHTML = staffFilterOptions;
+    entryFilterStaffEl.value = cur;
+  }
+  if (salesFilterStaffEl.innerHTML !== staffFilterOptions) {
+    const cur = salesFilterStaffEl.value;
+    salesFilterStaffEl.innerHTML = staffFilterOptions;
+    salesFilterStaffEl.value = cur;
   }
 
-  const salesTbody = document.getElementById('mgmtSalesTbody');
-  const salesEmpty = document.getElementById('mgmtSalesEmpty');
-  const sales = entries.filter(e => e.sold > 0);
-  if (!sales.length) {
-    salesTbody.innerHTML = '';
-    salesEmpty.classList.remove('hidden');
-  } else {
-    salesEmpty.classList.add('hidden');
-    salesTbody.innerHTML = sales.map(e => {
-      const s = staffById[e.staff_id];
-      return `<tr>
-        <td>${fmtDate(e.date)}</td>
-        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
-        <td>${escapeHtml(e.member_name || '—')}</td>
-        <td class="num">${e.sold}</td>
-        <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
-      </tr>`;
-    }).join('');
-  }
+  renderEntriesTable();
+  renderSalesTable();
 
   populateRevenuePeriods(entries);
   renderRevenue(entries, staff);
   renderSourceBreakdown(entries);
+  renderTrends(entries);
+  await renderAuditLog();
   maybeShowDailyRecap(entries, staffById);
   await renderScheduleAndAlert(entries, staffById);
-
-  window.__mgmtEntriesCache = entries;
-  window.__mgmtStaffCache = staff;
 
   const { data: leadRows } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
   const leads = leadRows || [];
@@ -2263,17 +2477,55 @@ async function removeStaffMgmt(id) {
   await renderMgmtHome();
 }
 
+async function logEntryAudit({ entryId, entryDate, entryStaffId, action, summary }) {
+  await supabase.from('entry_audit_log').insert({
+    entry_id: entryId,
+    entry_date: entryDate,
+    entry_staff_id: entryStaffId,
+    action,
+    changed_by: profile.id,
+    summary,
+  });
+}
+
+function buildEntryDiffSummary(before, after) {
+  const fields = [
+    ['date', 'date', v => v],
+    ['visits', 'visits', v => String(v)],
+    ['sold', 'sold', v => String(v)],
+    ['member_name', 'member', v => v || '—'],
+    ['revenue', 'revenue', v => (v != null ? fmtMoney(v) : '—')],
+    ['source', 'source', v => sourceLabel(v)],
+  ];
+  const changes = [];
+  fields.forEach(([key, label, fmt]) => {
+    const a = before[key], b = after[key];
+    const same = key === 'revenue' ? Number(a || 0) === Number(b || 0) : a === b;
+    if (!same) changes.push(`${label}: ${fmt(a)} → ${fmt(b)}`);
+  });
+  return changes.length ? changes.join('; ') : 'No changes';
+}
+
 async function removeMgmtEntry(id) {
+  const entry = (window.__mgmtEntriesCache || []).find(e => e.id === id);
   await supabase.from('entries').delete().eq('id', id);
+  if (entry) {
+    const summary = `Deleted entry: ${entry.visits} visits, ${entry.sold} sold` +
+      (entry.revenue != null ? `, ${fmtMoney(entry.revenue)}` : '') +
+      (entry.member_name ? `, member ${entry.member_name}` : '');
+    await logEntryAudit({ entryId: id, entryDate: entry.date, entryStaffId: entry.staff_id, action: 'delete', summary });
+  }
   await renderMgmtHome();
 }
 
 let editingEntryId = null;
+let editingEntrySnapshot = null;
 
 function openEditEntryModal(id) {
   const entry = (window.__mgmtEntriesCache || []).find(e => e.id === id);
   if (!entry) return;
   editingEntryId = id;
+  editingEntrySnapshot = { ...entry };
   document.getElementById('editEntryDate').value = entry.date;
   document.getElementById('editEntryVisits').value = entry.visits;
   document.getElementById('editEntrySold').value = entry.sold;
@@ -2302,11 +2554,22 @@ async function saveEditEntry() {
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
   if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale."; return; }
   if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
+  const after = { date, visits, sold, member_name: memberName || null, revenue, source };
   const { error } = await supabase
     .from('entries')
-    .update({ date, visits, sold, member_name: memberName || null, revenue, source })
+    .update(after)
     .eq('id', editingEntryId);
   if (error) { errEl.textContent = error.message; return; }
+  if (editingEntrySnapshot) {
+    const summary = buildEntryDiffSummary(editingEntrySnapshot, after);
+    await logEntryAudit({
+      entryId: editingEntryId,
+      entryDate: date,
+      entryStaffId: editingEntrySnapshot.staff_id,
+      action: 'update',
+      summary,
+    });
+  }
   closeEditEntryModal();
   await renderMgmtHome();
 }
@@ -2339,7 +2602,7 @@ async function saveTeamNote() {
 }
 
 function exportCsv() {
-  const entries = window.__mgmtEntriesCache || [];
+  const entries = applyEntryFilters(window.__mgmtEntriesCache || []);
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
   const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name', 'Revenue', 'Source', 'Conversion rate']];
   [...entries].sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
@@ -2428,6 +2691,30 @@ document.getElementById('revenuePeriodTypeSelect').addEventListener('change', e 
 document.getElementById('revenuePeriodSelect').addEventListener('change', e => {
   revenuePeriod = e.target.value;
   renderRevenue(window.__mgmtEntriesCache || [], window.__mgmtStaffCache || []);
+});
+
+document.getElementById('entryFilterStaff').addEventListener('change', e => { entryFilters.staffId = e.target.value; renderEntriesTable(); });
+document.getElementById('entryFilterFrom').addEventListener('change', e => { entryFilters.from = e.target.value; renderEntriesTable(); });
+document.getElementById('entryFilterTo').addEventListener('change', e => { entryFilters.to = e.target.value; renderEntriesTable(); });
+document.getElementById('entryFilterSource').addEventListener('change', e => { entryFilters.source = e.target.value; renderEntriesTable(); });
+document.getElementById('entryFilterClearBtn').addEventListener('click', () => {
+  entryFilters = { staffId: '', from: '', to: '', source: '' };
+  document.getElementById('entryFilterStaff').value = '';
+  document.getElementById('entryFilterFrom').value = '';
+  document.getElementById('entryFilterTo').value = '';
+  document.getElementById('entryFilterSource').value = '';
+  renderEntriesTable();
+});
+
+document.getElementById('salesFilterStaff').addEventListener('change', e => { salesFilters.staffId = e.target.value; renderSalesTable(); });
+document.getElementById('salesFilterFrom').addEventListener('change', e => { salesFilters.from = e.target.value; renderSalesTable(); });
+document.getElementById('salesFilterTo').addEventListener('change', e => { salesFilters.to = e.target.value; renderSalesTable(); });
+document.getElementById('salesFilterClearBtn').addEventListener('click', () => {
+  salesFilters = { staffId: '', from: '', to: '' };
+  document.getElementById('salesFilterStaff').value = '';
+  document.getElementById('salesFilterFrom').value = '';
+  document.getElementById('salesFilterTo').value = '';
+  renderSalesTable();
 });
 
 supabase.auth.onAuthStateChange((event, s) => {
