@@ -349,6 +349,10 @@
       <label>Member name</label>
       <input type="text" id="editEntryMemberName" placeholder="e.g. Jamie D.">
     </div>
+    <div class="field">
+      <label>Sale amount ($)</label>
+      <input type="number" id="editEntryRevenue" min="0" step="0.01">
+    </div>
     <button class="primary" id="editEntrySaveBtn">Save changes</button>
     <button class="link" style="margin-top:12px;" id="editEntryCancelBtn">Cancel</button>
     <p class="error" id="editEntryError"></p>
@@ -490,6 +494,10 @@
                 <label>Member name (first name + last initial)</label>
                 <input type="text" id="staffEntryMemberName" placeholder="e.g. Jamie D.">
               </div>
+              <div class="field">
+                <label>Sale amount ($)</label>
+                <input type="number" id="staffEntryRevenue" min="0" step="0.01" placeholder="e.g. 89">
+              </div>
               <button class="primary" id="staffAddEntryBtn">Add entry</button>
               <p class="error" id="staffEntryError"></p>
             </div>
@@ -512,7 +520,7 @@
             <div class="section-head"><h2>Your sales</h2></div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Member</th><th>Sold</th></tr></thead>
+                <thead><tr><th>Date</th><th>Member</th><th>Sold</th><th>Revenue</th></tr></thead>
                 <tbody id="staffSalesTbody"></tbody>
               </table>
               <div class="empty hidden" id="staffSalesEmpty">No sales logged yet.</div>
@@ -574,6 +582,10 @@
               <p class="stat-label">Total sold</p>
               <div class="stat-value" id="mgmtTotalSold">0</div>
             </div>
+            <div class="stat-card">
+              <p class="stat-label">Total revenue</p>
+              <div class="stat-value" id="mgmtTotalRevenue">$0</div>
+            </div>
           </div>
 
           <section>
@@ -600,7 +612,7 @@
             </div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Rate</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Revenue</th><th>Rate</th><th></th></tr></thead>
                 <tbody id="mgmtEntryTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
@@ -613,10 +625,45 @@
             <div class="section-head"><h2>All sales</h2></div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th></tr></thead>
+                <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th><th>Revenue</th></tr></thead>
                 <tbody id="mgmtSalesTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtSalesEmpty">No sales logged yet.</div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h2>Revenue</h2>
+              <div style="display:flex;gap:8px;">
+                <select id="revenuePeriodTypeSelect" style="width:auto;">
+                  <option value="month">By month</option>
+                  <option value="quarter">By quarter (3mo)</option>
+                  <option value="year">By year</option>
+                </select>
+                <select id="revenuePeriodSelect" style="width:auto;"></select>
+              </div>
+            </div>
+            <div class="stat-grid">
+              <div class="stat-card">
+                <p class="stat-label">Total revenue</p>
+                <div class="stat-value" id="revenueTotal">$0</div>
+              </div>
+              <div class="stat-card">
+                <p class="stat-label">Memberships sold</p>
+                <div class="stat-value" id="revenueSoldCount">0</div>
+              </div>
+              <div class="stat-card">
+                <p class="stat-label">Avg sale value</p>
+                <div class="stat-value" id="revenueAvg">$0</div>
+              </div>
+            </div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Staff</th><th>Sold</th><th>Revenue</th><th>Avg sale</th></tr></thead>
+                <tbody id="revenueStaffTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="revenueStaffEmpty">No sales logged for this period yet.</div>
             </div>
           </section>
         </div>
@@ -652,7 +699,7 @@
             <div class="section-head"><h2>Staff performance</h2></div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th></tr></thead>
+                <thead><tr><th>Staff</th><th>Visits</th><th>Sold</th><th>Revenue</th><th>Rate</th></tr></thead>
                 <tbody id="mgmtStaffTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtStaffEmpty">No staff added yet.</div>
@@ -727,6 +774,8 @@ let chatChannel = null;
 let funnelLeads = [];
 let funnelType = 'month';
 let funnelPeriod = null;
+let revenueType = 'month';
+let revenuePeriod = null;
 
 let logoClicks = 0;
 let logoClickTimer = null;
@@ -748,6 +797,7 @@ function showEasterEgg() {
 function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 function fmtTime(iso) { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+function fmtMoney(n) { return (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }); }
 
 function hideAll() {
   ['signInView', 'firstSetupView', 'appView'].forEach(id => document.getElementById(id).classList.add('hidden'));
@@ -1133,6 +1183,59 @@ function renderFunnel() {
   }).join('');
 }
 
+function periodKeyForDate(dateStr, type) {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (type === 'month') return isoMonthKey(d);
+  if (type === 'quarter') return isoQuarterKey(d);
+  return String(d.getFullYear());
+}
+
+function populateRevenuePeriods(entries) {
+  const sel = document.getElementById('revenuePeriodSelect');
+  const now = new Date();
+  const keys = new Set(entries.map(e => periodKeyForDate(e.date, revenueType)));
+  keys.add(periodKeyForDate(now.toISOString().slice(0, 10), revenueType));
+  const sorted = [...keys].sort().reverse();
+  if (!revenuePeriod || !sorted.includes(revenuePeriod)) revenuePeriod = sorted[0];
+  const label = k => revenueType === 'month' ? monthLabel(k) : revenueType === 'quarter' ? quarterLabel(k) : k;
+  sel.innerHTML = sorted.map(k => `<option value="${k}" ${k === revenuePeriod ? 'selected' : ''}>${label(k)}</option>`).join('');
+}
+
+function renderRevenue(entries, staff) {
+  const inPeriod = entries.filter(e => periodKeyForDate(e.date, revenueType) === revenuePeriod);
+  const totalRevenue = inPeriod.reduce((a, e) => a + (Number(e.revenue) || 0), 0);
+  const totalSold = inPeriod.reduce((a, e) => a + e.sold, 0);
+  document.getElementById('revenueTotal').textContent = fmtMoney(totalRevenue);
+  document.getElementById('revenueSoldCount').textContent = totalSold;
+  document.getElementById('revenueAvg').textContent = fmtMoney(totalSold > 0 ? totalRevenue / totalSold : 0);
+
+  const staffById = Object.fromEntries(staff.map(s => [s.id, s]));
+  const byStaff = {};
+  inPeriod.forEach(e => {
+    const bucket = (byStaff[e.staff_id] = byStaff[e.staff_id] || { sold: 0, revenue: 0 });
+    bucket.sold += e.sold;
+    bucket.revenue += Number(e.revenue) || 0;
+  });
+  const rows = Object.entries(byStaff)
+    .map(([staffId, b]) => ({ name: staffById[staffId] ? staffById[staffId].name : 'Removed staff', ...b }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const tbody = document.getElementById('revenueStaffTbody');
+  const emptyEl = document.getElementById('revenueStaffEmpty');
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>${escapeHtml(r.name)}</td>
+    <td class="num">${r.sold}</td>
+    <td class="num">${fmtMoney(r.revenue)}</td>
+    <td class="num">${fmtMoney(r.sold > 0 ? r.revenue / r.sold : 0)}</td>
+  </tr>`).join('');
+}
+
 async function addLead() {
   const nameInput = document.getElementById('leadName');
   const notesInput = document.getElementById('leadNotes');
@@ -1213,6 +1316,7 @@ async function renderStaffHome() {
       <td>${fmtDate(e.date)}</td>
       <td>${escapeHtml(e.member_name || '—')}</td>
       <td class="num">${e.sold}</td>
+      <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
     </tr>`).join('');
   }
 
@@ -1235,16 +1339,20 @@ async function addStaffEntry() {
   const visits = parseInt(document.getElementById('staffEntryVisits').value, 10);
   const sold = parseInt(document.getElementById('staffEntrySold').value, 10);
   const memberName = document.getElementById('staffEntryMemberName').value.trim();
+  const revenueInput = document.getElementById('staffEntryRevenue').value;
+  const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
   const errEl = document.getElementById('staffEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
   if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale (first name + last initial)."; return; }
+  if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
   errEl.textContent = '';
-  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold, member_name: memberName || null });
+  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold, member_name: memberName || null, revenue });
   if (error) { errEl.textContent = error.message; return; }
   document.getElementById('staffEntryVisits').value = '';
   document.getElementById('staffEntrySold').value = '';
   document.getElementById('staffEntryMemberName').value = '';
+  document.getElementById('staffEntryRevenue').value = '';
   if (sold > 0) launchConfetti();
   await renderStaffHome();
 }
@@ -1265,11 +1373,13 @@ async function renderMgmtHome() {
 
   const totalVisits = entries.reduce((a, r) => a + r.visits, 0);
   const totalSold = entries.reduce((a, r) => a + r.sold, 0);
+  const totalRevenue = entries.reduce((a, r) => a + (Number(r.revenue) || 0), 0);
   const teamRate = totalVisits > 0 ? (totalSold / totalVisits) * 100 : 0;
   document.getElementById('mgmtTeamRate').textContent = teamRate.toFixed(1) + '%';
   document.getElementById('mgmtTeamRate').style.color = teamRate >= target ? '#7FA593' : '#E07A3F';
   document.getElementById('mgmtTotalVisits').textContent = totalVisits;
   document.getElementById('mgmtTotalSold').textContent = totalSold;
+  document.getElementById('mgmtTotalRevenue').textContent = fmtMoney(totalRevenue);
   document.getElementById('mgmtTargetInput').value = target;
 
   const staffTbody = document.getElementById('mgmtStaffTbody');
@@ -1283,12 +1393,14 @@ async function renderMgmtHome() {
       const rows = entries.filter(e => e.staff_id === s.id);
       const visits = rows.reduce((a, r) => a + r.visits, 0);
       const sold = rows.reduce((a, r) => a + r.sold, 0);
+      const revenue = rows.reduce((a, r) => a + (Number(r.revenue) || 0), 0);
       const rate = visits > 0 ? (sold / visits) * 100 : 0;
       const hit = rate >= target;
       return `<tr>
         <td>${escapeHtml(s.name)}</td>
         <td class="num">${visits}</td>
         <td class="num">${sold}</td>
+        <td class="num">${fmtMoney(revenue)}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(1)}%</td>
       </tr>`;
     }).join('');
@@ -1321,6 +1433,7 @@ async function renderMgmtHome() {
         <td class="num">${e.visits}</td>
         <td class="num">${e.sold}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
+        <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
         <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
       </tr>`;
@@ -1342,9 +1455,13 @@ async function renderMgmtHome() {
         <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="num">${e.sold}</td>
+        <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
       </tr>`;
     }).join('');
   }
+
+  populateRevenuePeriods(entries);
+  renderRevenue(entries, staff);
 
   window.__mgmtEntriesCache = entries;
   window.__mgmtStaffCache = staff;
@@ -1443,6 +1560,7 @@ function openEditEntryModal(id) {
   document.getElementById('editEntryVisits').value = entry.visits;
   document.getElementById('editEntrySold').value = entry.sold;
   document.getElementById('editEntryMemberName').value = entry.member_name || '';
+  document.getElementById('editEntryRevenue').value = entry.revenue != null ? entry.revenue : '';
   document.getElementById('editEntryError').textContent = '';
   document.getElementById('editEntryModalOverlay').classList.remove('hidden');
 }
@@ -1457,13 +1575,16 @@ async function saveEditEntry() {
   const visits = parseInt(document.getElementById('editEntryVisits').value, 10);
   const sold = parseInt(document.getElementById('editEntrySold').value, 10);
   const memberName = document.getElementById('editEntryMemberName').value.trim();
+  const revenueInput = document.getElementById('editEntryRevenue').value;
+  const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
   const errEl = document.getElementById('editEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
   if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale."; return; }
+  if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
   const { error } = await supabase
     .from('entries')
-    .update({ date, visits, sold, member_name: memberName || null })
+    .update({ date, visits, sold, member_name: memberName || null, revenue })
     .eq('id', editingEntryId);
   if (error) { errEl.textContent = error.message; return; }
   closeEditEntryModal();
@@ -1500,11 +1621,11 @@ async function saveTeamNote() {
 function exportCsv() {
   const entries = window.__mgmtEntriesCache || [];
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
-  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name', 'Conversion rate']];
+  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name', 'Revenue', 'Conversion rate']];
   [...entries].sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
     const s = staffById[e.staff_id];
     const rate = e.visits > 0 ? ((e.sold / e.visits) * 100).toFixed(1) : '0.0';
-    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || '', rate + '%']);
+    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || '', e.revenue != null ? e.revenue : '', rate + '%']);
   });
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -1566,6 +1687,17 @@ document.getElementById('chatInput').addEventListener('keydown', e => { if (e.ke
     funnelPeriod = e.target.value;
     renderFunnel();
   });
+});
+
+document.getElementById('revenuePeriodTypeSelect').addEventListener('change', e => {
+  revenueType = e.target.value;
+  revenuePeriod = null;
+  populateRevenuePeriods(window.__mgmtEntriesCache || []);
+  renderRevenue(window.__mgmtEntriesCache || [], window.__mgmtStaffCache || []);
+});
+document.getElementById('revenuePeriodSelect').addEventListener('change', e => {
+  revenuePeriod = e.target.value;
+  renderRevenue(window.__mgmtEntriesCache || [], window.__mgmtStaffCache || []);
 });
 
 supabase.auth.onAuthStateChange((event, s) => {
