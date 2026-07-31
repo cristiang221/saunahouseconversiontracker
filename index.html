@@ -411,6 +411,17 @@
       <div class="empty hidden" id="staffEntryEmpty">No entries yet. Log your first day above.</div>
     </div>
   </section>
+
+  <section>
+    <div class="section-head"><h2>Your sales</h2></div>
+    <div class="panel" style="padding: 8px 22px;">
+      <table>
+        <thead><tr><th>Date</th><th>Member</th><th>Sold</th></tr></thead>
+        <tbody id="staffSalesTbody"></tbody>
+      </table>
+      <div class="empty hidden" id="staffSalesEmpty">No sales logged yet.</div>
+    </div>
+  </section>
 </div>
 
 <div class="wrap hidden" id="mgmtHomeView">
@@ -501,6 +512,17 @@
         <tbody id="mgmtEntryTbody"></tbody>
       </table>
       <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>All sales</h2></div>
+    <div class="panel" style="padding: 8px 22px;">
+      <table>
+        <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th></tr></thead>
+        <tbody id="mgmtSalesTbody"></tbody>
+      </table>
+      <div class="empty hidden" id="mgmtSalesEmpty">No sales logged yet.</div>
     </div>
   </section>
 </div>
@@ -850,6 +872,22 @@ async function renderStaffHome() {
       </tr>`;
     }).join('');
   }
+
+  const salesTbody = document.getElementById('staffSalesTbody');
+  const salesEmpty = document.getElementById('staffSalesEmpty');
+  const sales = rows.filter(e => e.sold > 0);
+  if (!sales.length) {
+    salesTbody.innerHTML = '';
+    salesEmpty.classList.remove('hidden');
+  } else {
+    salesEmpty.classList.add('hidden');
+    salesTbody.innerHTML = sales.map(e => `<tr>
+      <td>${fmtDate(e.date)}</td>
+      <td>${escapeHtml(e.member_name || '—')}</td>
+      <td class="num">${e.sold}</td>
+    </tr>`).join('');
+  }
+
   document.getElementById('staffEntryDate').valueAsDate = new Date();
 }
 
@@ -925,6 +963,8 @@ async function renderMgmtHome() {
     </div>
   `).join('') || `<div class="empty">No staff yet.</div>`;
 
+  const staffById = Object.fromEntries(staff.map(s => [s.id, s]));
+
   const entryTbody = document.getElementById('mgmtEntryTbody');
   const entryEmpty = document.getElementById('mgmtEntryEmpty');
   document.getElementById('mgmtEntryCount').textContent = entries.length ? `${entries.length} entries` : '';
@@ -933,7 +973,6 @@ async function renderMgmtHome() {
     entryEmpty.classList.remove('hidden');
   } else {
     entryEmpty.classList.add('hidden');
-    const staffById = Object.fromEntries(staff.map(s => [s.id, s]));
     entryTbody.innerHTML = entries.map(e => {
       const s = staffById[e.staff_id];
       const rate = e.visits > 0 ? (e.sold / e.visits) * 100 : 0;
@@ -946,6 +985,25 @@ async function renderMgmtHome() {
         <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
         <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  const salesTbody = document.getElementById('mgmtSalesTbody');
+  const salesEmpty = document.getElementById('mgmtSalesEmpty');
+  const sales = entries.filter(e => e.sold > 0);
+  if (!sales.length) {
+    salesTbody.innerHTML = '';
+    salesEmpty.classList.remove('hidden');
+  } else {
+    salesEmpty.classList.add('hidden');
+    salesTbody.innerHTML = sales.map(e => {
+      const s = staffById[e.staff_id];
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
+        <td>${escapeHtml(e.member_name || '—')}</td>
+        <td class="num">${e.sold}</td>
       </tr>`;
     }).join('');
   }
