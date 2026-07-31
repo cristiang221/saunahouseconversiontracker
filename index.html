@@ -2000,6 +2000,10 @@ function renderSalesTable() {
 }
 
 function maybeShowDailyRecap(entries, staffById) {
+  const todayStr = localDateStr(new Date());
+  if (localStorage.getItem('dailyRecapShown') === todayStr) return;
+  localStorage.setItem('dailyRecapShown', todayStr);
+
   const y = new Date();
   y.setDate(y.getDate() - 1);
   const yesterdayStr = localDateStr(y);
