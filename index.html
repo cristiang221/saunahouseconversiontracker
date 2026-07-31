@@ -338,6 +338,59 @@
     .sidebar-footer button { width: auto; }
     .app-main { padding: 20px 16px 60px; }
   }
+
+  /* ------------------------------------------------------------------- */
+  /* Motion: kept short and springy so it reads as "lively", not laggy.  */
+  /* ------------------------------------------------------------------- */
+  @keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .page:not(.hidden) { animation: page-in 0.28s ease both; }
+
+  @keyframes modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modal-pop-in { from { opacity: 0; transform: scale(0.94) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  .modal-overlay:not(.hidden) { animation: modal-fade-in 0.18s ease both; }
+  .modal-overlay:not(.hidden) .panel { animation: modal-pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+  button { transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+  button:hover { transform: translateY(-1px); }
+  button:active { transform: translateY(0) scale(0.96); }
+  button.primary:hover { box-shadow: 0 4px 14px rgba(224, 122, 63, 0.35); }
+
+  .nav-item { transition: background 0.15s ease, color 0.15s ease; }
+
+  @keyframes badge-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  .nav-badge:not(.hidden) { animation: badge-pulse 1.6s ease-in-out infinite; }
+
+  @keyframes flame-bounce { 0%, 100% { transform: translateY(0) rotate(0deg); } 25% { transform: translateY(-2px) rotate(-6deg); } 75% { transform: translateY(-1px) rotate(6deg); } }
+  .flame-bounce { display: inline-block; animation: flame-bounce 1.2s ease-in-out infinite; }
+
+  @keyframes row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  tbody tr { animation: row-in 0.3s ease both; }
+  tbody tr:nth-child(1) { animation-delay: 0.02s; } tbody tr:nth-child(2) { animation-delay: 0.05s; }
+  tbody tr:nth-child(3) { animation-delay: 0.08s; } tbody tr:nth-child(4) { animation-delay: 0.11s; }
+  tbody tr:nth-child(5) { animation-delay: 0.14s; } tbody tr:nth-child(6) { animation-delay: 0.17s; }
+  tbody tr:nth-child(7) { animation-delay: 0.20s; } tbody tr:nth-child(8) { animation-delay: 0.23s; }
+  tbody tr:nth-child(9) { animation-delay: 0.26s; } tbody tr:nth-child(10) { animation-delay: 0.29s; }
+
+  @keyframes stat-pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  .stat-card { animation: stat-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .stat-card:nth-child(1) { animation-delay: 0.02s; } .stat-card:nth-child(2) { animation-delay: 0.07s; }
+  .stat-card:nth-child(3) { animation-delay: 0.12s; } .stat-card:nth-child(4) { animation-delay: 0.17s; }
+  .stat-card:nth-child(5) { animation-delay: 0.22s; }
+  .stat-value { transition: color 0.3s ease; }
+
+  .brand-logo, .logo-mini { transition: transform 0.2s ease; }
+  .brand-logo:hover, .logo-mini:hover { transform: scale(1.06) rotate(-2deg); }
+
+  .lead-card, .report-card { transition: transform 0.15s ease, border-color 0.15s ease; }
+  .report-card:hover { transform: translateY(-3px); border-color: var(--ember-dim); }
+  .lead-card:hover { transform: translateX(2px); }
+
+  @keyframes funnel-grow { from { width: 0; } }
+  .funnel-row-bar { animation: funnel-grow 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
 </style>
 </head>
 <body>
@@ -1237,7 +1290,7 @@ function renderLeaderboardTable() {
     const hit = r.rate >= target;
     const isMe = profile && r.staff_id === profile.id;
     return `<tr${isMe ? ' style="background:var(--panel-raised);"' : ''}>
-      <td class="num">${i + 1}${i === 0 && r.sold > 0 ? ' 🔥' : ''}</td>
+      <td class="num">${i + 1}${i === 0 && r.sold > 0 ? ' <span class="flame-bounce">🔥</span>' : ''}</td>
       <td>${escapeHtml(r.name)}${isMe ? ' <span class="badge">you</span>' : ''}</td>
       <td class="num">${r.visits}</td>
       <td class="num">${r.sold}</td>
