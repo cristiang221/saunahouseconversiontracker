@@ -39,6 +39,15 @@ create table public.messages (
   created_at timestamptz not null default now()
 );
 
+create table public.leads (
+  id uuid primary key default gen_random_uuid(),
+  staff_id uuid not null references public.profiles(id) on delete cascade,
+  name text not null,
+  notes text,
+  followed_up boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so they can read profiles/settings
 -- without recursing through the RLS policies defined on those tables)
@@ -107,6 +116,7 @@ alter table public.profiles enable row level security;
 alter table public.entries enable row level security;
 alter table public.settings enable row level security;
 alter table public.messages enable row level security;
+alter table public.leads enable row level security;
 
 -- profiles: readable by any signed-in user (names/roles aren't sensitive);
 -- writable only by the row owner (name) or a manager (name + role); no
@@ -176,6 +186,29 @@ create policy "messages insertable by sender"
 
 -- Broadcast new messages over Supabase Realtime so the chat updates live.
 alter publication supabase_realtime add table public.messages;
+
+-- leads: follow-up list ("people who were interested"). Staff see/act on
+-- only their own; managers see/act on everyone's, grouped by who added it.
+create policy "leads readable by owner or manager"
+  on public.leads for select
+  to authenticated
+  using (staff_id = auth.uid() or public.is_manager());
+
+create policy "leads insertable by owner or manager"
+  on public.leads for insert
+  to authenticated
+  with check (staff_id = auth.uid() or public.is_manager());
+
+create policy "leads updatable by owner or manager"
+  on public.leads for update
+  to authenticated
+  using (staff_id = auth.uid() or public.is_manager())
+  with check (staff_id = auth.uid() or public.is_manager());
+
+create policy "leads deletable by owner or manager"
+  on public.leads for delete
+  to authenticated
+  using (staff_id = auth.uid() or public.is_manager());
 
 -- ---------------------------------------------------------------------------
 -- Leaderboard: per-staff, per-month totals for everyone, visible to any

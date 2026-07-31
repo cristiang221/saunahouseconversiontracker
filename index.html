@@ -229,6 +229,17 @@
   .chat-msg-body { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
   .chat-input-row { display: flex; gap: 10px; margin-top: 12px; }
   .chat-input-row input { flex: 1; }
+
+  .lead-group { margin-bottom: 20px; }
+  .lead-group:last-child { margin-bottom: 0; }
+  .lead-group-heading { margin: 0 0 8px; }
+  .lead-card { padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+  .lead-card:last-child { border-bottom: none; }
+  .lead-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+  .lead-card-name { font-size: 14px; font-weight: 500; }
+  .lead-card-notes { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0; white-space: pre-wrap; word-break: break-word; }
+  .lead-card-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11.5px; color: var(--text-faint); flex-wrap: wrap; }
+  .badge.pending { color: var(--ember); border-color: var(--ember); }
 </style>
 </head>
 <body>
@@ -422,6 +433,22 @@
       <div class="empty hidden" id="staffSalesEmpty">No sales logged yet.</div>
     </div>
   </section>
+
+  <section>
+    <div class="section-head"><h2>Follow-ups</h2></div>
+    <div class="panel">
+      <div class="inline-row">
+        <input type="text" id="leadName" placeholder="Name">
+        <input type="text" id="leadNotes" placeholder="Notes (e.g. asked about family plans)">
+        <button class="primary" style="width:auto;" id="leadAddBtn">Add</button>
+      </div>
+      <p class="error" id="leadError"></p>
+    </div>
+    <div class="panel" style="margin-top: 14px;">
+      <div id="staffLeadsList"></div>
+      <div class="empty hidden" id="staffLeadsEmpty">No follow-ups yet — add people who were interested but didn't sign up.</div>
+    </div>
+  </section>
 </div>
 
 <div class="wrap hidden" id="mgmtHomeView">
@@ -523,6 +550,14 @@
         <tbody id="mgmtSalesTbody"></tbody>
       </table>
       <div class="empty hidden" id="mgmtSalesEmpty">No sales logged yet.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Follow-ups</h2></div>
+    <div class="panel">
+      <div id="mgmtLeadsGroups"></div>
+      <div class="empty hidden" id="mgmtLeadsEmpty">No follow-ups logged yet.</div>
     </div>
   </section>
 </div>
@@ -829,6 +864,61 @@ async function fetchOwnEntries() {
   return error ? [] : data;
 }
 
+async function fetchOwnLeads() {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('*')
+    .eq('staff_id', profile.id)
+    .order('followed_up', { ascending: true })
+    .order('created_at', { ascending: false });
+  return error ? [] : data;
+}
+
+function renderLeadCard(l, staffName) {
+  const badge = l.followed_up
+    ? '<span class="badge done">followed up</span>'
+    : '<span class="badge pending">needs follow-up</span>';
+  return `<div class="lead-card">
+    <div class="lead-card-head">
+      <span class="lead-card-name">${escapeHtml(l.name)}${staffName ? ` <span style="color:var(--text-faint);font-weight:400;">— ${escapeHtml(staffName)}</span>` : ''}</span>
+      ${badge}
+    </div>
+    ${l.notes ? `<div class="lead-card-notes">${escapeHtml(l.notes)}</div>` : ''}
+    <div class="lead-card-meta">
+      <span>${fmtDate(l.created_at.slice(0, 10))}</span>
+      <span>
+        <button class="ghost" onclick="toggleLeadFollowedUp('${l.id}', ${!l.followed_up})">${l.followed_up ? 'mark pending' : 'mark followed up'}</button>
+        <button class="ghost" onclick="removeLead('${l.id}')">delete</button>
+      </span>
+    </div>
+  </div>`;
+}
+
+async function addLead() {
+  const nameInput = document.getElementById('leadName');
+  const notesInput = document.getElementById('leadNotes');
+  const errEl = document.getElementById('leadError');
+  const name = nameInput.value.trim();
+  const notes = notesInput.value.trim();
+  if (!name) { errEl.textContent = 'Enter a name.'; return; }
+  errEl.textContent = '';
+  const { error } = await supabase.from('leads').insert({ staff_id: profile.id, name, notes: notes || null });
+  if (error) { errEl.textContent = error.message; return; }
+  nameInput.value = '';
+  notesInput.value = '';
+  await renderStaffHome();
+}
+
+async function toggleLeadFollowedUp(id, value) {
+  await supabase.from('leads').update({ followed_up: value }).eq('id', id);
+  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+}
+
+async function removeLead(id) {
+  await supabase.from('leads').delete().eq('id', id);
+  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+}
+
 async function renderStaffHome() {
   document.getElementById('staffHomeName').textContent = profile.name;
   document.getElementById('staffAccountEmail').textContent = session.user.email;
@@ -889,6 +979,17 @@ async function renderStaffHome() {
   }
 
   document.getElementById('staffEntryDate').valueAsDate = new Date();
+
+  const leads = await fetchOwnLeads();
+  const leadsListEl = document.getElementById('staffLeadsList');
+  const leadsEmptyEl = document.getElementById('staffLeadsEmpty');
+  if (!leads.length) {
+    leadsListEl.innerHTML = '';
+    leadsEmptyEl.classList.remove('hidden');
+  } else {
+    leadsEmptyEl.classList.add('hidden');
+    leadsListEl.innerHTML = leads.map(l => renderLeadCard(l)).join('');
+  }
 }
 
 async function addStaffEntry() {
@@ -1010,6 +1111,27 @@ async function renderMgmtHome() {
 
   window.__mgmtEntriesCache = entries;
   window.__mgmtStaffCache = staff;
+
+  const { data: leadRows } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+  const leads = leadRows || [];
+  const leadsByStaff = {};
+  leads.forEach(l => { (leadsByStaff[l.staff_id] = leadsByStaff[l.staff_id] || []).push(l); });
+
+  const leadsGroupsEl = document.getElementById('mgmtLeadsGroups');
+  const leadsEmptyEl = document.getElementById('mgmtLeadsEmpty');
+  const staffWithLeads = staff.filter(s => leadsByStaff[s.id]?.length);
+  if (!staffWithLeads.length) {
+    leadsGroupsEl.innerHTML = '';
+    leadsEmptyEl.classList.remove('hidden');
+  } else {
+    leadsEmptyEl.classList.add('hidden');
+    leadsGroupsEl.innerHTML = staffWithLeads.map(s => `
+      <div class="lead-group">
+        <p class="stat-label lead-group-heading">${escapeHtml(s.name)}</p>
+        ${leadsByStaff[s.id].map(l => renderLeadCard(l)).join('')}
+      </div>
+    `).join('');
+  }
 }
 
 async function addStaffMgmt() {
@@ -1162,7 +1284,7 @@ function exportCsv() {
 Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
-  openEditEntryModal,
+  openEditEntryModal, toggleLeadFollowedUp, removeLead,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -1170,6 +1292,7 @@ document.getElementById('signInPassword').addEventListener('keydown', e => { if 
 document.getElementById('setupBtn').addEventListener('click', createFirstManager);
 document.getElementById('staffAddEntryBtn').addEventListener('click', addStaffEntry);
 document.getElementById('mgmtAddStaffBtn').addEventListener('click', addStaffMgmt);
+document.getElementById('leadAddBtn').addEventListener('click', addLead);
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('mgmtSaveNoteBtn').addEventListener('click', saveTeamNote);
