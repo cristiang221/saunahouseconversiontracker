@@ -21,7 +21,6 @@ create table public.entries (
   date date not null,
   visits int not null check (visits >= 0),
   sold int not null check (sold >= 0),
-  member_name text,
   created_at timestamptz not null default now()
 );
 

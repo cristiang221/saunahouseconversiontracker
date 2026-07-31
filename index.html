@@ -250,10 +250,6 @@
       <label>Memberships sold</label>
       <input type="number" id="editEntrySold" min="0" step="1">
     </div>
-    <div class="field">
-      <label>Member name</label>
-      <input type="text" id="editEntryMemberName" placeholder="e.g. Jamie D.">
-    </div>
     <button class="primary" id="editEntrySaveBtn">Save changes</button>
     <button class="link" style="margin-top:12px;" id="editEntryCancelBtn">Cancel</button>
     <p class="error" id="editEntryError"></p>
@@ -381,10 +377,6 @@
           <input type="number" id="staffEntrySold" min="0" step="1" placeholder="0">
         </div>
       </div>
-      <div class="field">
-        <label>Member name (first name + last initial)</label>
-        <input type="text" id="staffEntryMemberName" placeholder="e.g. Jamie D.">
-      </div>
       <button class="primary" id="staffAddEntryBtn">Add entry</button>
       <p class="error" id="staffEntryError"></p>
     </div>
@@ -394,7 +386,7 @@
     <div class="section-head"><h2>Your recent entries</h2></div>
     <div class="panel" style="padding: 8px 22px;">
       <table>
-        <thead><tr><th>Date</th><th>Visits</th><th>Sold</th><th>Member</th><th>Rate</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Visits</th><th>Sold</th><th>Rate</th><th></th></tr></thead>
         <tbody id="staffEntryTbody"></tbody>
       </table>
       <div class="empty hidden" id="staffEntryEmpty">No entries yet. Log your first day above.</div>
@@ -486,7 +478,7 @@
     </div>
     <div class="panel" style="padding: 8px 22px;">
       <table>
-        <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Rate</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Rate</th><th></th></tr></thead>
         <tbody id="mgmtEntryTbody"></tbody>
       </table>
       <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
@@ -756,7 +748,6 @@ async function renderStaffHome() {
         <td>${fmtDate(e.date)}</td>
         <td class="num">${e.visits}</td>
         <td class="num">${e.sold}</td>
-        <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="rate-cell ${hitRow ? 'hit' : 'miss'}">${r.toFixed(0)}%</td>
         <td><button class="ghost" onclick="removeStaffEntry('${e.id}')">delete</button></td>
       </tr>`;
@@ -769,17 +760,14 @@ async function addStaffEntry() {
   const date = document.getElementById('staffEntryDate').value;
   const visits = parseInt(document.getElementById('staffEntryVisits').value, 10);
   const sold = parseInt(document.getElementById('staffEntrySold').value, 10);
-  const memberName = document.getElementById('staffEntryMemberName').value.trim();
   const errEl = document.getElementById('staffEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
-  if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale (first name + last initial)."; return; }
   errEl.textContent = '';
-  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold, member_name: memberName || null });
+  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold });
   if (error) { errEl.textContent = error.message; return; }
   document.getElementById('staffEntryVisits').value = '';
   document.getElementById('staffEntrySold').value = '';
-  document.getElementById('staffEntryMemberName').value = '';
   if (sold > 0) launchConfetti();
   await renderStaffHome();
 }
@@ -855,7 +843,6 @@ async function renderMgmtHome() {
         <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
         <td class="num">${e.visits}</td>
         <td class="num">${e.sold}</td>
-        <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
         <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
       </tr>`;
@@ -937,7 +924,6 @@ function openEditEntryModal(id) {
   document.getElementById('editEntryDate').value = entry.date;
   document.getElementById('editEntryVisits').value = entry.visits;
   document.getElementById('editEntrySold').value = entry.sold;
-  document.getElementById('editEntryMemberName').value = entry.member_name || '';
   document.getElementById('editEntryError').textContent = '';
   document.getElementById('editEntryModalOverlay').classList.remove('hidden');
 }
@@ -951,14 +937,12 @@ async function saveEditEntry() {
   const date = document.getElementById('editEntryDate').value;
   const visits = parseInt(document.getElementById('editEntryVisits').value, 10);
   const sold = parseInt(document.getElementById('editEntrySold').value, 10);
-  const memberName = document.getElementById('editEntryMemberName').value.trim();
   const errEl = document.getElementById('editEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
-  if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale."; return; }
   const { error } = await supabase
     .from('entries')
-    .update({ date, visits, sold, member_name: memberName || null })
+    .update({ date, visits, sold })
     .eq('id', editingEntryId);
   if (error) { errEl.textContent = error.message; return; }
   closeEditEntryModal();
@@ -995,11 +979,11 @@ async function saveTeamNote() {
 function exportCsv() {
   const entries = window.__mgmtEntriesCache || [];
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
-  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name', 'Conversion rate']];
+  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Conversion rate']];
   [...entries].sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
     const s = staffById[e.staff_id];
     const rate = e.visits > 0 ? ((e.sold / e.visits) * 100).toFixed(1) : '0.0';
-    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || '', rate + '%']);
+    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, rate + '%']);
   });
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
