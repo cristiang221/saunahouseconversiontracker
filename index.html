@@ -825,10 +825,11 @@
             <div class="section-head"><h2>Upload schedule</h2></div>
             <div class="panel">
               <p class="sub" style="margin-bottom:12px;">
-                CSV with two columns: <strong>email</strong> and <strong>date</strong> (YYYY-MM-DD) — one row per staff member per scheduled day. Re-uploading adds to what's already there; it won't remove existing scheduled days.
+                Export your weekly schedule sheet as a CSV and upload it as-is — no reformatting needed. It looks for date-labeled columns (e.g. <strong>Mon.07.20</strong>) with staff rows below them, and marks someone scheduled whenever their cell for that day contains <strong>SH</strong> (e.g. "3-8-SH"). Cells like "X", "OFF", or other locations (G, O, Oak, TR) are ignored. Staff are matched by first name. Re-uploading adds to what's already there; it won't remove existing scheduled days.
               </p>
               <div class="inline-row">
                 <input type="file" id="scheduleFileInput" accept=".csv">
+                <input type="number" id="scheduleYearInput" style="max-width:110px;" placeholder="Year">
                 <button class="primary" style="width:auto;" id="scheduleUploadBtn">Upload</button>
               </div>
               <p class="error" id="scheduleUploadError"></p>
@@ -1654,8 +1655,59 @@ async function renderScheduleAndAlert(entries, staffById) {
   }
 }
 
+function parseCsvGrid(text) {
+  return text.split(/\r?\n/).filter(l => l.length).map(line => {
+    // Basic CSV split that tolerates quoted cells (spreadsheet exports
+    // sometimes wrap cells in quotes, especially blank/merged ones).
+    const cells = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (ch === ',' && !inQuotes) { cells.push(cur.trim()); cur = ''; continue; }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  });
+}
+
+function parseScheduleGrid(text, year) {
+  const rows = parseCsvGrid(text);
+  // Matches header cells like "Mon.07.20" or "Tues. 07.21".
+  const dateHeaderRe = /^[A-Za-z]{3,9}\.?\s*(\d{1,2})\.(\d{1,2})$/;
+
+  let colDates = null;
+  const shiftsByFirstName = {};
+
+  rows.forEach(row => {
+    const matches = row.map(cell => dateHeaderRe.exec(cell));
+    if (matches.filter(Boolean).length >= 2) {
+      colDates = row.map((cell, i) => {
+        const m = matches[i];
+        if (!m) return null;
+        return `${year}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`;
+      });
+      return;
+    }
+    if (!colDates) return;
+    const name = row[0];
+    if (!name || !/^[A-Za-z]/.test(name) || /front desk/i.test(name) || /^week\b/i.test(name)) return;
+    const firstName = name.split(/\s+/)[0].toLowerCase();
+    row.forEach((cell, i) => {
+      const date = colDates[i];
+      if (!date || !cell || !/\bSH\b/i.test(cell)) return;
+      (shiftsByFirstName[firstName] = shiftsByFirstName[firstName] || new Set()).add(date);
+    });
+  });
+
+  return shiftsByFirstName;
+}
+
 async function uploadSchedule() {
   const fileInput = document.getElementById('scheduleFileInput');
+  const yearInput = document.getElementById('scheduleYearInput');
   const errEl = document.getElementById('scheduleUploadError');
   const noticeEl = document.getElementById('scheduleUploadNotice');
   errEl.textContent = '';
@@ -1663,34 +1715,40 @@ async function uploadSchedule() {
 
   const file = fileInput.files[0];
   if (!file) { errEl.textContent = 'Choose a CSV file first.'; return; }
+  const year = parseInt(yearInput.value, 10);
+  if (isNaN(year)) { errEl.textContent = 'Enter the year this schedule is for.'; return; }
 
   const text = await file.text();
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  if (!lines.length) { errEl.textContent = 'File is empty.'; return; }
+  const shiftsByFirstName = parseScheduleGrid(text, year);
+  const foundNames = Object.keys(shiftsByFirstName);
+  if (!foundNames.length) {
+    errEl.textContent = 'Could not find any SH shifts — check that the file has date column headers like "Mon.07.20" and cells containing "SH".';
+    return;
+  }
 
-  let dataLines = lines;
-  if (/^email\s*,\s*date$/i.test(lines[0])) dataLines = lines.slice(1);
-
-  const staffByEmail = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.email.toLowerCase(), s]));
-  const rows = [];
-  let skipped = 0;
-  dataLines.forEach(line => {
-    const [emailRaw, dateRaw] = line.split(',').map(v => (v || '').trim());
-    const staff = emailRaw ? staffByEmail[emailRaw.toLowerCase()] : null;
-    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw || '');
-    if (staff && validDate) {
-      rows.push({ staff_id: staff.id, date: dateRaw });
-    } else {
-      skipped++;
-    }
+  const staffByFirstName = {};
+  (window.__mgmtStaffCache || []).forEach(s => {
+    staffByFirstName[s.name.split(/\s+/)[0].toLowerCase()] = s;
   });
 
-  if (!rows.length) { errEl.textContent = 'No valid rows found — check the email and date columns.'; return; }
+  const rows = [];
+  const unmatched = [];
+  foundNames.forEach(firstName => {
+    const staff = staffByFirstName[firstName];
+    if (!staff) { unmatched.push(firstName); return; }
+    shiftsByFirstName[firstName].forEach(date => rows.push({ staff_id: staff.id, date }));
+  });
+
+  if (!rows.length) {
+    errEl.textContent = `Found SH shifts, but none matched a staff member's first name (${unmatched.join(', ')}).`;
+    return;
+  }
 
   const { error } = await supabase.from('schedule').upsert(rows, { onConflict: 'staff_id,date' });
   if (error) { errEl.textContent = error.message; return; }
 
-  noticeEl.textContent = `${rows.length} scheduled day${rows.length === 1 ? '' : 's'} saved.${skipped ? ` ${skipped} row(s) skipped (unknown email or bad date).` : ''}`;
+  noticeEl.textContent = `${rows.length} scheduled SH shift${rows.length === 1 ? '' : 's'} saved for ${foundNames.length - unmatched.length} staff.` +
+    (unmatched.length ? ` Not matched to any staff member: ${unmatched.join(', ')}.` : '');
   noticeEl.classList.remove('hidden');
   fileInput.value = '';
 
@@ -2128,6 +2186,7 @@ document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('dailyRecapCloseBtn').addEventListener('click', closeDailyRecap);
 document.getElementById('scheduleUploadBtn').addEventListener('click', uploadSchedule);
+document.getElementById('scheduleYearInput').value = new Date().getFullYear();
 document.getElementById('mgmtSaveNoteBtn').addEventListener('click', saveTeamNote);
 document.getElementById('editEntrySaveBtn').addEventListener('click', saveEditEntry);
 document.getElementById('editEntryCancelBtn').addEventListener('click', closeEditEntryModal);
