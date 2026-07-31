@@ -218,6 +218,17 @@
     0% { transform: translateY(0) rotate(0deg); opacity: 1; }
     100% { transform: translateY(110vh) rotate(720deg); opacity: 0.85; }
   }
+
+  .chat-box { display: flex; flex-direction: column; height: 420px; padding: 16px; }
+  .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+  .chat-msg { padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+  .chat-msg:last-child { border-bottom: none; }
+  .chat-msg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .chat-msg-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; color: var(--sage); }
+  .chat-msg-time { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+  .chat-msg-body { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .chat-input-row { display: flex; gap: 10px; margin-top: 12px; }
+  .chat-input-row input { flex: 1; }
 </style>
 </head>
 <body>
@@ -502,6 +513,20 @@
   </section>
 </div>
 
+<div class="wrap hidden" id="chatView">
+  <section>
+    <div class="section-head"><h2>Team chat</h2></div>
+    <div class="panel chat-box">
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Message the team..." maxlength="2000">
+        <button class="primary" style="width:auto;" id="chatSendBtn">Send</button>
+      </div>
+      <p class="error" id="chatError"></p>
+    </div>
+  </section>
+</div>
+
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
@@ -516,6 +541,8 @@ let teamNote = '';
 let leaderboardRows = [];
 let leaderboardProfiles = [];
 let leaderboardMonth = null;
+let profilesById = {};
+let chatChannel = null;
 
 let logoClicks = 0;
 let logoClickTimer = null;
@@ -536,9 +563,10 @@ function showEasterEgg() {
 
 function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+function fmtTime(iso) { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 
 function hideAll() {
-  ['signInView', 'firstSetupView', 'staffHomeView', 'mgmtHomeView', 'leaderboardView'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  ['signInView', 'firstSetupView', 'staffHomeView', 'mgmtHomeView', 'leaderboardView', 'chatView'].forEach(id => document.getElementById(id).classList.add('hidden'));
 }
 
 function showSignIn() {
@@ -609,6 +637,7 @@ async function savePassword() {
 async function route() {
   if (!session) {
     profile = null;
+    unsubscribeChat();
     hideAll();
     const { data: hasManager, error } = await supabase.rpc('has_manager');
     if (error) {
@@ -638,6 +667,9 @@ async function route() {
   }
   await loadLeaderboard();
   document.getElementById('leaderboardView').classList.remove('hidden');
+  await loadChat();
+  document.getElementById('chatView').classList.remove('hidden');
+  subscribeChat();
 }
 
 function monthLabel(key) {
@@ -651,6 +683,7 @@ async function loadLeaderboard() {
     supabase.rpc('monthly_leaderboard'),
   ]);
   leaderboardProfiles = profilesData || [];
+  profilesById = Object.fromEntries(leaderboardProfiles.map(p => [p.id, p]));
   leaderboardRows = error ? [] : lbRows;
 
   const months = new Set(leaderboardRows.map(r => r.month.slice(0, 7)));
@@ -699,6 +732,62 @@ function renderLeaderboardTable() {
       <td class="rate-cell ${hit ? 'hit' : 'miss'}">${r.rate.toFixed(1)}%</td>
     </tr>`;
   }).join('');
+}
+
+async function loadChat() {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id, body, created_at, sender_id, profiles(name)')
+    .order('created_at', { ascending: true })
+    .limit(200);
+  const container = document.getElementById('chatMessages');
+  container.innerHTML = '';
+  if (!error && data) data.forEach(m => appendChatMessage(m));
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendChatMessage(m) {
+  const container = document.getElementById('chatMessages');
+  const name = m.profiles?.name || profilesById[m.sender_id]?.name || 'Someone';
+  const el = document.createElement('div');
+  el.className = 'chat-msg';
+  el.innerHTML = `
+    <div class="chat-msg-head">
+      <span class="chat-msg-name">${escapeHtml(name)}</span>
+      <span class="chat-msg-time">${fmtTime(m.created_at)}</span>
+    </div>
+    <div class="chat-msg-body">${escapeHtml(m.body)}</div>
+  `;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const errEl = document.getElementById('chatError');
+  const body = input.value.trim();
+  if (!body) return;
+  errEl.textContent = '';
+  const { error } = await supabase.from('messages').insert({ sender_id: profile.id, body });
+  if (error) { errEl.textContent = error.message; return; }
+  input.value = '';
+}
+
+function subscribeChat() {
+  if (chatChannel) return;
+  chatChannel = supabase
+    .channel('messages-realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+      appendChatMessage(payload.new);
+    })
+    .subscribe();
+}
+
+function unsubscribeChat() {
+  if (chatChannel) {
+    supabase.removeChannel(chatChannel);
+    chatChannel = null;
+  }
 }
 
 async function fetchOwnEntries() {
@@ -1029,6 +1118,9 @@ document.getElementById('leaderboardMonthSelect').addEventListener('change', e =
   leaderboardMonth = e.target.value;
   renderLeaderboardTable();
 });
+
+document.getElementById('chatSendBtn').addEventListener('click', sendChatMessage);
+document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMessage(); });
 
 supabase.auth.onAuthStateChange((_event, s) => {
   session = s;

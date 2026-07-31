@@ -31,6 +31,13 @@ create table public.settings (
 );
 insert into public.settings (id, target) values (1, 20);
 
+create table public.messages (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(btrim(body)) > 0 and char_length(body) <= 2000),
+  created_at timestamptz not null default now()
+);
+
 -- ---------------------------------------------------------------------------
 -- Helper functions (security definer so they can read profiles/settings
 -- without recursing through the RLS policies defined on those tables)
@@ -98,6 +105,7 @@ create trigger on_auth_user_created
 alter table public.profiles enable row level security;
 alter table public.entries enable row level security;
 alter table public.settings enable row level security;
+alter table public.messages enable row level security;
 
 -- profiles: readable by any signed-in user (names/roles aren't sensitive);
 -- writable only by the row owner (name) or a manager (name + role); no
@@ -152,6 +160,21 @@ create policy "settings updatable by manager"
   to authenticated
   using (public.is_manager())
   with check (public.is_manager());
+
+-- messages: a single team-wide chat, visible to everyone signed in. No
+-- update/delete policy on purpose — once posted, a message stays forever.
+create policy "messages readable by authenticated"
+  on public.messages for select
+  to authenticated
+  using (true);
+
+create policy "messages insertable by sender"
+  on public.messages for insert
+  to authenticated
+  with check (sender_id = auth.uid());
+
+-- Broadcast new messages over Supabase Realtime so the chat updates live.
+alter publication supabase_realtime add table public.messages;
 
 -- ---------------------------------------------------------------------------
 -- Leaderboard: per-staff, per-month totals for everyone, visible to any
