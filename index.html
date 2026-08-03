@@ -29,7 +29,46 @@
     color: var(--text);
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
+    --ambient-1: #E0A25F;
+    --ambient-2: #7FA593;
   }
+  body[data-time="morning"] { --ambient-1: #6E90B0; --ambient-2: #8FAFC4; }
+  body[data-time="midday"]  { --ambient-1: #E0A25F; --ambient-2: #7FA593; }
+  body[data-time="evening"] { --ambient-1: #E07A3F; --ambient-2: #C1553F; }
+  body[data-time="night"]   { --ambient-1: #3A4560; --ambient-2: #5C4A6B; }
+
+  .ambient-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .ambient-bg::before {
+    content: '';
+    position: absolute;
+    inset: -20% -10%;
+    background-image: repeating-linear-gradient(112deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 15px);
+    animation: grain-drift 140s linear infinite;
+  }
+  .ambient-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: 0.07;
+    transition: background 4s ease;
+    animation: ambient-float 58s ease-in-out infinite;
+  }
+  .ambient-blob.b1 { width: 440px; height: 440px; top: -12%; left: 6%; background: var(--ambient-1); animation-duration: 58s; }
+  .ambient-blob.b2 { width: 380px; height: 380px; top: 42%; right: 2%; background: var(--ambient-2); animation-duration: 71s; animation-delay: -22s; }
+  .ambient-blob.b3 { width: 320px; height: 320px; bottom: -14%; left: 38%; background: var(--ambient-1); animation-duration: 64s; animation-delay: -40s; }
+  @keyframes ambient-float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -36px) scale(1.08); }
+    66% { transform: translate(-24px, 26px) scale(0.95); }
+  }
+  @keyframes grain-drift {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(-220px, -150px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ambient-blob, .ambient-bg::before { animation: none; }
+  }
+  .wrap, .app-shell, .modal-overlay, .easter-egg-overlay { position: relative; z-index: 1; }
   .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
   .wrap.narrow { max-width: 420px; }
   header { margin-bottom: 32px; }
@@ -106,6 +145,10 @@
   .account-row span { font-size: 12.5px; color: var(--text-faint); }
   .badge { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--sage); border: 1px solid var(--sage); border-radius: 999px; padding: 2px 8px; }
 
+  .avatar { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; color: rgba(0,0,0,0.72); flex: none; vertical-align: middle; }
+  .avatar.lg { width: 32px; height: 32px; font-size: 12px; }
+  .name-with-avatar { display: inline-flex; align-items: center; gap: 8px; }
+
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 14px; margin-bottom: 28px; }
   .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
   .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px; }
@@ -128,6 +171,8 @@
   td.rate-cell.miss { color: var(--ember); }
 
   .empty { color: var(--text-faint); font-size: 13.5px; padding: 20px 0; text-align: center; }
+  .empty-icon { display: block; font-size: 24px; margin: 0 auto 8px; color: var(--ember); opacity: 0.6; }
+  .empty-warm-text { max-width: 320px; margin: 0 auto; line-height: 1.5; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 16px; }
   .inline-row { display: flex; gap: 10px; }
   .inline-row input { flex: 1; }
@@ -232,7 +277,9 @@
   .lead-group { margin-bottom: 20px; }
   .lead-group:last-child { margin-bottom: 0; }
   .lead-group-heading { margin: 0 0 8px; }
-  .lead-card { padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+  .lead-card { padding: 12px 0 12px 10px; margin-left: -10px; border-bottom: 1px solid var(--line-soft); border-left: 3px solid transparent; transition: border-color 0.2s ease, background 0.2s ease; }
+  .lead-card.urgent-overdue { border-left-color: var(--danger); background: linear-gradient(90deg, rgba(193,85,63,0.09), transparent 65%); }
+  .lead-card.urgent-upcoming { border-left-color: var(--ember); background: linear-gradient(90deg, rgba(224,122,63,0.08), transparent 65%); }
   .lead-card:last-child { border-bottom: none; }
   .lead-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
   .lead-card-name { font-size: 14px; font-weight: 500; }
@@ -391,9 +438,50 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
   }
+
+  .poster-print-area { display: none; }
+  body.printing-poster { background: #F4EDE1; }
+  body.printing-poster > *:not(.poster-print-area) { display: none !important; }
+  body.printing-poster .poster-print-area { display: block !important; }
+  .poster-page {
+    width: 100%;
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 70px 50px;
+    background: #F4EDE1;
+    color: #2A2117;
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #C1553F;
+    outline: 1px solid #C1553F;
+    outline-offset: -16px;
+  }
+  .poster-eyebrow { font-family: 'JetBrains Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px; color: #C1553F; margin-bottom: 6px; }
+  .poster-month { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #7A6E5C; margin-bottom: 36px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .poster-headline { font-family: 'Fraunces', serif; font-size: 22px; color: #7A6E5C; margin-bottom: 20px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .poster-avatar { width: 110px; height: 110px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Fraunces', serif; font-size: 42px; font-weight: 600; color: rgba(0,0,0,0.75); margin: 0 auto 20px; }
+  .poster-name { font-family: 'Fraunces', serif; font-size: 52px; font-weight: 600; margin-bottom: 22px; }
+  .poster-stats { display: flex; gap: 40px; justify-content: center; margin-bottom: 42px; }
+  .poster-stat-value { font-family: 'Fraunces', serif; font-size: 30px; font-weight: 600; color: #C1553F; }
+  .poster-stat-label { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: #7A6E5C; margin-top: 4px; }
+  .poster-milestone { font-family: 'Fraunces', serif; font-style: italic; font-size: 18px; color: #4B4030; max-width: 480px; line-height: 1.5; margin-bottom: 32px; }
+  .poster-footer { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9C907C; letter-spacing: 0.04em; }
+  @media print {
+    @page { margin: 0; }
+  }
 </style>
 </head>
 <body>
+
+<div class="ambient-bg" aria-hidden="true">
+  <div class="ambient-blob b1"></div>
+  <div class="ambient-blob b2"></div>
+  <div class="ambient-blob b3"></div>
+</div>
 
 <div class="easter-egg-overlay" id="easterEgg">
   <div class="steam" style="left:44%; animation-delay:0s;"></div>
@@ -645,7 +733,7 @@
                 <thead><tr><th>Date</th><th>Visits</th><th>Sold</th><th>Rate</th><th></th></tr></thead>
                 <tbody id="staffEntryTbody"></tbody>
               </table>
-              <div class="empty hidden" id="staffEntryEmpty">No entries yet. Log your first day above.</div>
+              <div class="empty hidden" id="staffEntryEmpty"><i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — first one's coming. Log today's entry above to get started.</span></div>
             </div>
           </section>
         </div>
@@ -658,7 +746,7 @@
                 <thead><tr><th>Date</th><th>Member</th><th>Sold</th><th>Revenue</th></tr></thead>
                 <tbody id="staffSalesTbody"></tbody>
               </table>
-              <div class="empty hidden" id="staffSalesEmpty">No sales logged yet.</div>
+              <div class="empty hidden" id="staffSalesEmpty"><i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — the first sale's coming.</span></div>
             </div>
           </section>
         </div>
@@ -675,7 +763,7 @@
             </div>
             <div class="panel" style="margin-top: 14px;">
               <div id="staffLeadsList"></div>
-              <div class="empty hidden" id="staffLeadsEmpty">No follow-ups yet — add people who were interested but didn't sign up.</div>
+              <div class="empty hidden" id="staffLeadsEmpty"><i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — add people who were interested but didn't sign up, and they'll show up here.</span></div>
             </div>
           </section>
 
@@ -858,7 +946,7 @@
           <section>
             <div class="panel">
               <div id="mgmtLeadsGroups"></div>
-              <div class="empty hidden" id="mgmtLeadsEmpty">No follow-ups logged yet.</div>
+              <div class="empty hidden" id="mgmtLeadsEmpty"><i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — the first follow-up's coming.</span></div>
             </div>
           </section>
 
@@ -1016,6 +1104,7 @@
               </table>
               <div class="empty hidden" id="leaderboardEmpty">No entries logged for this month yet.</div>
             </div>
+            <button class="ghost hidden" id="printPosterBtn" style="width:auto;margin-top:14px;" onclick="printWallOfFame()"><i class="ti ti-printer"></i> Print wall of fame poster</button>
           </section>
         </div>
 
@@ -1058,11 +1147,35 @@
   </div>
 </div>
 
+<div class="poster-print-area" id="posterPrintArea">
+  <div class="poster-page">
+    <div class="poster-eyebrow">Sauna House &middot; Team Achievement</div>
+    <div class="poster-month" id="posterMonth"></div>
+    <div class="poster-headline">Top Performer</div>
+    <div class="poster-avatar" id="posterAvatar"></div>
+    <div class="poster-name" id="posterName"></div>
+    <div class="poster-stats" id="posterStats"></div>
+    <div class="poster-milestone" id="posterMilestone"></div>
+    <div class="poster-footer">Printed <span id="posterPrintedDate"></span> &middot; Sauna House Conversion Tracker</div>
+  </div>
+</div>
+
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function applyAmbientTimeOfDay() {
+  const hour = new Date().getHours();
+  const period = hour >= 5 && hour < 11 ? 'morning'
+    : hour >= 11 && hour < 17 ? 'midday'
+    : hour >= 17 && hour < 21 ? 'evening'
+    : 'night';
+  document.body.dataset.time = period;
+}
+applyAmbientTimeOfDay();
+setInterval(applyAmbientTimeOfDay, 30 * 60 * 1000);
 
 let session = null;
 let profile = null;
@@ -1123,6 +1236,25 @@ function sourceLabel(source) { return source ? (SOURCE_LABELS[source] || source)
 function isManagerLike() { return !!profile && (profile.role === 'manager' || profile.role === 'supervisor'); }
 function isManager() { return !!profile && profile.role === 'manager'; }
 function canSeeRevenue() { return isManager(); }
+
+function staffHue(id) {
+  const str = String(id || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  return hash % 360;
+}
+function staffInitials(name) {
+  const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+function staffAvatarHtml(id, name, size) {
+  const hue = staffHue(id);
+  return `<span class="avatar${size === 'lg' ? ' lg' : ''}" style="background:hsl(${hue},58%,62%);" title="${escapeAttr(name || '')}">${escapeHtml(staffInitials(name))}</span>`;
+}
+function nameWithAvatarHtml(id, name, size) {
+  return `<span class="name-with-avatar">${staffAvatarHtml(id, name, size)}<span>${escapeHtml(name || '')}</span></span>`;
+}
 
 function hideAll() {
   ['signInView', 'firstSetupView', 'appView'].forEach(id => document.getElementById(id).classList.add('hidden'));
@@ -1371,18 +1503,56 @@ function renderLeaderboardTable() {
     return;
   }
   emptyEl.classList.add('hidden');
+  document.getElementById('printPosterBtn').classList.toggle('hidden', !isManagerLike());
   tbody.innerHTML = combined.map((r, i) => {
     const hit = r.rate >= target;
     const isMe = profile && r.staff_id === profile.id;
     return `<tr${isMe ? ' style="background:var(--panel-raised);"' : ''}>
       <td class="num">${i + 1}${i === 0 && r.sold > 0 ? ' <span class="flame-bounce">🔥</span>' : ''}</td>
-      <td>${escapeHtml(r.name)}${isMe ? ' <span class="badge">you</span>' : ''}</td>
+      <td>${nameWithAvatarHtml(r.staff_id, r.name)}${isMe ? ' <span class="badge">you</span>' : ''}</td>
       <td class="num">${r.visits}</td>
       <td class="num">${r.sold}</td>
       <td class="rate-cell ${hit ? 'hit' : 'miss'}">${r.rate.toFixed(1)}%</td>
     </tr>`;
   }).join('');
 }
+
+function printWallOfFame() {
+  const monthRows = leaderboardRows.filter(r => r.month.slice(0, 7) === leaderboardMonth);
+  const byStaff = Object.fromEntries(monthRows.map(r => [r.staff_id, r]));
+  const combined = leaderboardProfiles
+    .map(p => {
+      const r = byStaff[p.id];
+      return { staff_id: p.id, name: p.name, visits: r ? Number(r.visits) : 0, sold: r ? Number(r.sold) : 0, rate: r ? Number(r.rate) : 0 };
+    })
+    .sort((a, b) => b.sold - a.sold || b.rate - a.rate);
+  const top = combined[0];
+  if (!top || top.sold === 0) {
+    alert('No sales logged yet this month — nothing to put on the wall just yet.');
+    return;
+  }
+
+  const allTimeSold = (window.__mgmtEntriesCache || []).reduce((a, e) => a + e.sold, 0);
+
+  document.getElementById('posterMonth').textContent = monthLabel(leaderboardMonth);
+  const avatarEl = document.getElementById('posterAvatar');
+  avatarEl.textContent = staffInitials(top.name);
+  avatarEl.style.background = `hsl(${staffHue(top.staff_id)},58%,62%)`;
+  document.getElementById('posterName').textContent = top.name;
+  document.getElementById('posterStats').innerHTML = `
+    <div><div class="poster-stat-value">${top.sold}</div><div class="poster-stat-label">Members sold</div></div>
+    <div><div class="poster-stat-value">${top.visits}</div><div class="poster-stat-label">Visits</div></div>
+    <div><div class="poster-stat-value">${top.rate.toFixed(1)}%</div><div class="poster-stat-label">Conversion rate</div></div>
+  `;
+  document.getElementById('posterMilestone').textContent = allTimeSold > 0
+    ? `The team has converted ${allTimeSold} member${allTimeSold === 1 ? '' : 's'} all-time — onward.`
+    : '';
+  document.getElementById('posterPrintedDate').textContent = fmtDate(localDateStr(new Date()));
+
+  document.body.classList.add('printing-poster');
+  window.print();
+}
+window.addEventListener('afterprint', () => document.body.classList.remove('printing-poster'));
 
 async function loadChat() {
   const { data, error } = await supabase
@@ -1462,7 +1632,7 @@ async function loadDMs() {
     contactsPanel.classList.remove('hidden');
     const staffList = (window.__mgmtStaffCache || []).filter(s => s.role === 'staff');
     document.getElementById('dmContactsList').innerHTML = staffList.map(s => `
-      <button class="ghost dm-contact ${s.id === dmRecipientId ? 'active' : ''}" onclick="selectDmContact('${s.id}')">${escapeHtml(s.name)}</button>
+      <button class="ghost dm-contact ${s.id === dmRecipientId ? 'active' : ''}" onclick="selectDmContact('${s.id}')">${nameWithAvatarHtml(s.id, s.name)}</button>
     `).join('') || '<div class="empty">No staff yet.</div>';
     if (!dmRecipientId && staffList.length) {
       dmRecipientId = staffList[0].id;
@@ -1595,6 +1765,16 @@ async function addLeadNote(leadId) {
   await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
 }
 
+function leadUrgencyClass(l) {
+  if (l.followed_up || !l.remind_at) return '';
+  const todayStr = localDateStr(new Date());
+  if (l.remind_at < todayStr) return 'urgent-overdue';
+  const soon = new Date();
+  soon.setDate(soon.getDate() + 3);
+  if (l.remind_at <= localDateStr(soon)) return 'urgent-upcoming';
+  return '';
+}
+
 function renderLeadCard(l, notes, staffName) {
   const badge = l.followed_up
     ? '<span class="badge done">followed up</span>'
@@ -1608,7 +1788,7 @@ function renderLeadCard(l, notes, staffName) {
       <div class="lead-note-body">${escapeHtml(n.body)}</div>
     </div>
   `).join('');
-  return `<div class="lead-card">
+  return `<div class="lead-card ${leadUrgencyClass(l)}">
     <div class="lead-card-head">
       <span class="lead-card-name">${escapeHtml(l.name)}${staffName ? ` <span style="color:var(--text-faint);font-weight:400;">— ${escapeHtml(staffName)}</span>` : ''}</span>
       <span style="display:flex;align-items:center;gap:8px;">
@@ -1970,7 +2150,9 @@ function renderEntriesTable() {
   if (!entries.length) {
     entryTbody.innerHTML = '';
     entryEmpty.classList.remove('hidden');
-    entryEmpty.textContent = allEntries.length ? 'No entries match these filters.' : 'No entries logged yet.';
+    entryEmpty.innerHTML = allEntries.length
+      ? 'No entries match these filters.'
+      : '<i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — first one\'s coming.</span>';
   } else {
     entryEmpty.classList.add('hidden');
     entryTbody.innerHTML = entries.map(e => {
@@ -1979,7 +2161,7 @@ function renderEntriesTable() {
       const hit = rate >= target;
       return `<tr>
         <td>${fmtDate(e.date)}</td>
-        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
+        <td>${s ? nameWithAvatarHtml(s.id, s.name) : escapeHtml('Removed staff')}</td>
         <td class="num">${e.visits}</td>
         <td class="num">${e.sold}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
@@ -2002,14 +2184,16 @@ function renderSalesTable() {
   if (!sales.length) {
     salesTbody.innerHTML = '';
     salesEmpty.classList.remove('hidden');
-    salesEmpty.textContent = allSales.length ? 'No sales match these filters.' : 'No sales logged yet.';
+    salesEmpty.innerHTML = allSales.length
+      ? 'No sales match these filters.'
+      : '<i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — the first sale\'s coming.</span>';
   } else {
     salesEmpty.classList.add('hidden');
     salesTbody.innerHTML = sales.map(e => {
       const s = staffById[e.staff_id];
       return `<tr>
         <td>${fmtDate(e.date)}</td>
-        <td>${escapeHtml(s ? s.name : 'Removed staff')}</td>
+        <td>${s ? nameWithAvatarHtml(s.id, s.name) : escapeHtml('Removed staff')}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="num">${e.sold}</td>
         <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
@@ -2378,7 +2562,7 @@ async function renderMgmtHome() {
       const rate = visits > 0 ? (sold / visits) * 100 : 0;
       const hit = rate >= target;
       return `<tr>
-        <td>${escapeHtml(s.name)}</td>
+        <td>${nameWithAvatarHtml(s.id, s.name)}</td>
         <td class="num">${visits}</td>
         <td class="num">${sold}</td>
         ${canSeeRevenue() ? `<td class="num">${fmtMoney(revenue)}</td>` : ''}
@@ -2391,7 +2575,7 @@ async function renderMgmtHome() {
 
   document.getElementById('mgmtStaffList').innerHTML = staff.map(s => `
     <div class="staff-row">
-      <span style="font-size:13.5px;">${escapeHtml(s.name)} <span style="color:var(--text-faint);">${escapeHtml(s.email)}</span> ${s.role === 'manager' ? '<span class="badge">manager</span>' : ''}${s.role === 'supervisor' ? '<span class="badge">supervisor</span>' : ''}</span>
+      <span style="font-size:13.5px;display:flex;align-items:center;gap:8px;">${staffAvatarHtml(s.id, s.name)}${escapeHtml(s.name)} <span style="color:var(--text-faint);">${escapeHtml(s.email)}</span> ${s.role === 'manager' ? '<span class="badge">manager</span>' : ''}${s.role === 'supervisor' ? '<span class="badge">supervisor</span>' : ''}</span>
       <span style="display:flex;align-items:center;gap:10px;">
         ${s.id === profile.id ? '' : `
           <select class="role-select" style="width:auto;font-size:12px;padding:4px 8px;" onchange="updateStaffRole('${s.id}', this.value)">
@@ -2448,7 +2632,7 @@ async function renderMgmtHome() {
     leadsEmptyEl.classList.add('hidden');
     leadsGroupsEl.innerHTML = staffWithLeads.map(s => `
       <div class="lead-group">
-        <p class="stat-label lead-group-heading">${escapeHtml(s.name)}</p>
+        <p class="stat-label lead-group-heading">${nameWithAvatarHtml(s.id, s.name)}</p>
         ${leadsByStaff[s.id].map(l => renderLeadCard(l, notesByLead[l.id])).join('')}
       </div>
     `).join('');
@@ -2684,7 +2868,7 @@ Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv, updateStaffRole,
   openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
-  selectDmContact, saveLeadReminder, snoozeLeadReminder, openNameModal,
+  selectDmContact, saveLeadReminder, snoozeLeadReminder, openNameModal, printWallOfFame,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
