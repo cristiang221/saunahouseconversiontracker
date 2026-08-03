@@ -11,7 +11,7 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null,
   email text not null,
-  role text not null default 'staff' check (role in ('staff', 'manager')),
+  role text not null default 'staff' check (role in ('staff', 'manager', 'supervisor')),
   created_at timestamptz not null default now()
 );
 
@@ -120,10 +120,29 @@ as $$
   select exists (select 1 from public.profiles where role = 'manager');
 $$;
 
+-- can_manage(): true for managers AND supervisors. Supervisors get the
+-- same team-oversight access as managers everywhere except revenue
+-- figures (enforced client-side, see index.html) and staff account
+-- management (creating/deleting logins, which stays gated to
+-- is_manager() specifically — see the profiles policies below and the
+-- two Netlify Functions).
+create or replace function public.can_manage()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.profiles where id = auth.uid() and role in ('manager', 'supervisor')
+  );
+$$;
+
 -- Exposed so the signed-out client can decide whether to show the
 -- "first-time setup" screen or a normal sign-in form.
 grant execute on function public.has_manager() to anon, authenticated;
 grant execute on function public.is_manager() to authenticated;
+grant execute on function public.can_manage() to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- New-user bootstrap: every auth.users row gets a matching profiles row.
@@ -187,29 +206,31 @@ create policy "profiles deletable by manager"
   to authenticated
   using (public.is_manager());
 
--- entries: staff see/act on their own rows only; managers see/act on all.
+-- entries: staff see/act on their own rows only; managers/supervisors
+-- see/act on all (can_manage() covers both roles).
 create policy "entries readable by owner or manager"
   on public.entries for select
   to authenticated
-  using (staff_id = auth.uid() or public.is_manager());
+  using (staff_id = auth.uid() or public.can_manage());
 
 create policy "entries insertable by owner or manager"
   on public.entries for insert
   to authenticated
-  with check (staff_id = auth.uid() or public.is_manager());
+  with check (staff_id = auth.uid() or public.can_manage());
 
 create policy "entries updatable by owner or manager"
   on public.entries for update
   to authenticated
-  using (staff_id = auth.uid() or public.is_manager())
-  with check (staff_id = auth.uid() or public.is_manager());
+  using (staff_id = auth.uid() or public.can_manage())
+  with check (staff_id = auth.uid() or public.can_manage());
 
 create policy "entries deletable by owner or manager"
   on public.entries for delete
   to authenticated
-  using (staff_id = auth.uid() or public.is_manager());
+  using (staff_id = auth.uid() or public.can_manage());
 
--- settings: everyone signed in can read the target; only managers can set it.
+-- settings: everyone signed in can read the target; managers/supervisors
+-- can set it.
 create policy "settings readable by authenticated"
   on public.settings for select
   to authenticated
@@ -218,8 +239,8 @@ create policy "settings readable by authenticated"
 create policy "settings updatable by manager"
   on public.settings for update
   to authenticated
-  using (public.is_manager())
-  with check (public.is_manager());
+  using (public.can_manage())
+  with check (public.can_manage());
 
 -- messages: a single team-wide chat, visible to everyone signed in. No
 -- update/delete policy on purpose — once posted, a message stays forever.
@@ -237,31 +258,32 @@ create policy "messages insertable by sender"
 alter publication supabase_realtime add table public.messages;
 
 -- leads: follow-up list ("people who were interested"). Staff see/act on
--- only their own; managers see/act on everyone's, grouped by who added it.
+-- only their own; managers/supervisors see/act on everyone's, grouped by
+-- who added it.
 create policy "leads readable by owner or manager"
   on public.leads for select
   to authenticated
-  using (staff_id = auth.uid() or public.is_manager());
+  using (staff_id = auth.uid() or public.can_manage());
 
 create policy "leads insertable by owner or manager"
   on public.leads for insert
   to authenticated
-  with check (staff_id = auth.uid() or public.is_manager());
+  with check (staff_id = auth.uid() or public.can_manage());
 
 create policy "leads updatable by owner or manager"
   on public.leads for update
   to authenticated
-  using (staff_id = auth.uid() or public.is_manager())
-  with check (staff_id = auth.uid() or public.is_manager());
+  using (staff_id = auth.uid() or public.can_manage())
+  with check (staff_id = auth.uid() or public.can_manage());
 
 create policy "leads deletable by owner or manager"
   on public.leads for delete
   to authenticated
-  using (staff_id = auth.uid() or public.is_manager());
+  using (staff_id = auth.uid() or public.can_manage());
 
 -- lead_notes: an append-only log per lead. Visibility follows the parent
--- lead's owner (or a manager), not who authored the individual note — a
--- manager can see and add to notes on anyone's lead.
+-- lead's owner (or a manager/supervisor), not who authored the individual
+-- note — a manager/supervisor can see and add to notes on anyone's lead.
 create policy "lead_notes readable by lead owner or manager"
   on public.lead_notes for select
   to authenticated
@@ -269,7 +291,7 @@ create policy "lead_notes readable by lead owner or manager"
     exists (
       select 1 from public.leads l
       where l.id = lead_notes.lead_id
-        and (l.staff_id = auth.uid() or public.is_manager())
+        and (l.staff_id = auth.uid() or public.can_manage())
     )
   );
 
@@ -281,14 +303,14 @@ create policy "lead_notes insertable by lead owner or manager"
     and exists (
       select 1 from public.leads l
       where l.id = lead_notes.lead_id
-        and (l.staff_id = auth.uid() or public.is_manager())
+        and (l.staff_id = auth.uid() or public.can_manage())
     )
   );
 
--- direct_messages: private manager <-> staff threads. Enforced at the DB
--- level, not just the UI — an insert is only allowed when either the
--- sender or the recipient is a manager, so staff can never message
--- each other directly.
+-- direct_messages: private manager/supervisor <-> staff threads. Enforced
+-- at the DB level, not just the UI — an insert is only allowed when
+-- either the sender or the recipient can manage, so staff can never
+-- message each other directly.
 create policy "direct_messages readable by sender or recipient"
   on public.direct_messages for select
   to authenticated
@@ -300,49 +322,49 @@ create policy "direct_messages insertable manager or to manager"
   with check (
     sender_id = auth.uid()
     and (
-      public.is_manager()
-      or exists (select 1 from public.profiles p where p.id = recipient_id and p.role = 'manager')
+      public.can_manage()
+      or exists (select 1 from public.profiles p where p.id = recipient_id and p.role in ('manager', 'supervisor'))
     )
   );
 
 alter publication supabase_realtime add table public.direct_messages;
 
--- schedule: manager-only compliance tool (who's scheduled to work which
--- days, used to flag staff who didn't log a tracker entry). Staff never
--- read or write this table.
+-- schedule: manager/supervisor compliance tool (who's scheduled to work
+-- which days, used to flag staff who didn't log a tracker entry). Staff
+-- never read or write this table.
 create policy "schedule readable by manager"
   on public.schedule for select
   to authenticated
-  using (public.is_manager());
+  using (public.can_manage());
 
 create policy "schedule insertable by manager"
   on public.schedule for insert
   to authenticated
-  with check (public.is_manager());
+  with check (public.can_manage());
 
 create policy "schedule updatable by manager"
   on public.schedule for update
   to authenticated
-  using (public.is_manager())
-  with check (public.is_manager());
+  using (public.can_manage())
+  with check (public.can_manage());
 
 create policy "schedule deletable by manager"
   on public.schedule for delete
   to authenticated
-  using (public.is_manager());
+  using (public.can_manage());
 
--- entry_audit_log: manager-only, both directions. No update/delete
+-- entry_audit_log: manager/supervisor, both directions. No update/delete
 -- policy at all — like messages, this is meant to be a permanent,
 -- tamper-proof record once written.
 create policy "entry_audit_log readable by manager"
   on public.entry_audit_log for select
   to authenticated
-  using (public.is_manager());
+  using (public.can_manage());
 
 create policy "entry_audit_log insertable by manager"
   on public.entry_audit_log for insert
   to authenticated
-  with check (public.is_manager() and changed_by = auth.uid());
+  with check (public.can_manage() and changed_by = auth.uid());
 
 -- ---------------------------------------------------------------------------
 -- Leaderboard: per-staff, per-month totals for everyone, visible to any

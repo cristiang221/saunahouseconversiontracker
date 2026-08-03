@@ -427,7 +427,7 @@
       <label>Member name</label>
       <input type="text" id="editEntryMemberName" placeholder="e.g. Jamie D.">
     </div>
-    <div class="field">
+    <div class="field" id="editEntryRevenueField">
       <label>Sale amount ($)</label>
       <input type="number" id="editEntryRevenue" min="0" step="0.01">
     </div>
@@ -722,7 +722,7 @@
               <p class="stat-label">Total sold</p>
               <div class="stat-value" id="mgmtTotalSold">0</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" id="mgmtRevenueStatCard">
               <p class="stat-label">Total revenue</p>
               <div class="stat-value" id="mgmtTotalRevenue">$0</div>
             </div>
@@ -781,7 +781,7 @@
             </div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th>Revenue</th><th>Source</th><th>Rate</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th id="mgmtEntryRevenueHeader">Revenue</th><th>Source</th><th>Rate</th><th></th></tr></thead>
                 <tbody id="mgmtEntryTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
@@ -885,14 +885,14 @@
             <div class="section-head"><h2>Staff performance</h2></div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Staff</th><th>Visits</th><th>Sold</th><th>Revenue</th><th>Rate</th></tr></thead>
+                <thead><tr><th>Staff</th><th>Visits</th><th>Sold</th><th id="mgmtStaffRevenueHeader">Revenue</th><th>Rate</th></tr></thead>
                 <tbody id="mgmtStaffTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtStaffEmpty">No staff added yet.</div>
             </div>
           </section>
 
-          <section>
+          <section id="mgmtManageStaffSection">
             <div class="section-head"><h2>Manage staff</h2></div>
             <div class="panel">
               <div class="inline-row">
@@ -916,7 +916,7 @@
                 <p>Every logged day, by staff member, with member name, revenue, and source. Exportable as CSV.</p>
                 <button onclick="showPage('mgmt-entries')">View</button>
               </div>
-              <div class="panel report-card">
+              <div class="panel report-card" id="reportsRevenueCard">
                 <h3>Revenue</h3>
                 <p>Total revenue, sold count, and average sale value by month, quarter, or year, broken down per staff member.</p>
                 <button onclick="showPage('mgmt-sales')">View</button>
@@ -943,7 +943,7 @@
             <div class="section-head"><h2>Source breakdown</h2></div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Source</th><th>Visits</th><th>Sold</th><th>Revenue</th><th>Rate</th></tr></thead>
+                <thead><tr><th>Source</th><th>Visits</th><th>Sold</th><th id="reportsSourceRevenueHeader">Revenue</th><th>Rate</th></tr></thead>
                 <tbody id="reportsSourceTbody"></tbody>
               </table>
               <div class="empty hidden" id="reportsSourceEmpty">No entries logged yet.</div>
@@ -952,7 +952,7 @@
 
           <section>
             <div class="section-head"><h2>Trends (last 30 days)</h2></div>
-            <div class="panel" style="margin-bottom:14px;">
+            <div class="panel" style="margin-bottom:14px;" id="revenueTrendPanel">
               <p class="stat-label" style="margin-bottom:10px;">Daily revenue</p>
               <div id="revenueTrendChart"></div>
             </div>
@@ -1120,6 +1120,9 @@ const SOURCE_LABELS = {
   other: 'Other',
 };
 function sourceLabel(source) { return source ? (SOURCE_LABELS[source] || source) : 'Not specified'; }
+function isManagerLike() { return !!profile && (profile.role === 'manager' || profile.role === 'supervisor'); }
+function isManager() { return !!profile && profile.role === 'manager'; }
+function canSeeRevenue() { return isManager(); }
 
 function hideAll() {
   ['signInView', 'firstSetupView', 'appView'].forEach(id => document.getElementById(id).classList.add('hidden'));
@@ -1139,6 +1142,17 @@ const NAV_ITEMS = {
     { id: 'mgmt-dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
     { id: 'mgmt-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'mgmt-sales', label: 'Sales', icon: 'ti-receipt' },
+    { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
+    { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
+    { id: 'mgmt-schedule', label: 'Schedule', icon: 'ti-calendar' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
+    { id: 'dms', label: 'Messages', icon: 'ti-mail' },
+    { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
+  ],
+  supervisor: [
+    { id: 'mgmt-dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
+    { id: 'mgmt-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
     { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
     { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
@@ -1263,7 +1277,7 @@ async function saveName() {
   profile.name = name;
   closeNameModal();
   await loadLeaderboard();
-  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
 }
 
 async function route() {
@@ -1294,7 +1308,7 @@ async function route() {
   hideAll();
   document.getElementById('appView').classList.remove('hidden');
   buildSidebar(profile.role);
-  if (profile.role === 'manager') {
+  if (isManagerLike()) {
     await renderMgmtHome();
   } else {
     await renderStaffHome();
@@ -1305,7 +1319,7 @@ async function route() {
   await loadFunnel();
   await loadDMs();
   subscribeDMs();
-  showPage(profile.role === 'manager' ? 'mgmt-dashboard' : 'staff-dashboard');
+  showPage(isManagerLike() ? 'mgmt-dashboard' : 'staff-dashboard');
 }
 
 function monthLabel(key) {
@@ -1444,9 +1458,9 @@ function selectDmContact(staffId) {
 
 async function loadDMs() {
   const contactsPanel = document.getElementById('dmContactsPanel');
-  if (profile.role === 'manager') {
+  if (isManagerLike()) {
     contactsPanel.classList.remove('hidden');
-    const staffList = (window.__mgmtStaffCache || []).filter(s => s.role !== 'manager');
+    const staffList = (window.__mgmtStaffCache || []).filter(s => s.role === 'staff');
     document.getElementById('dmContactsList').innerHTML = staffList.map(s => `
       <button class="ghost dm-contact ${s.id === dmRecipientId ? 'active' : ''}" onclick="selectDmContact('${s.id}')">${escapeHtml(s.name)}</button>
     `).join('') || '<div class="empty">No staff yet.</div>';
@@ -1458,7 +1472,7 @@ async function loadDMs() {
   } else {
     contactsPanel.classList.add('hidden');
     if (!dmRecipientId) {
-      const { data } = await supabase.from('profiles').select('id, name').eq('role', 'manager').limit(1).maybeSingle();
+      const { data } = await supabase.from('profiles').select('id, name').in('role', ['manager', 'supervisor']).order('role').limit(1).maybeSingle();
       dmRecipientId = data?.id || null;
       dmRecipientName = data?.name || 'management';
     }
@@ -1578,7 +1592,7 @@ async function addLeadNote(leadId) {
   if (!body) return;
   const { error } = await supabase.from('lead_notes').insert({ lead_id: leadId, staff_id: profile.id, body });
   if (error) { alert(error.message); return; }
-  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
 }
 
 function renderLeadCard(l, notes, staffName) {
@@ -1625,7 +1639,7 @@ function renderLeadCard(l, notes, staffName) {
 
 async function updateLeadStage(id, stage) {
   await supabase.from('leads').update({ stage }).eq('id', id);
-  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
   await loadFunnel();
 }
 
@@ -1633,7 +1647,7 @@ async function saveLeadReminder(id) {
   const dateVal = document.getElementById('leadReminderDate-' + id).value || null;
   const noteVal = document.getElementById('leadReminderNoteInput-' + id).value.trim() || null;
   await supabase.from('leads').update({ remind_at: dateVal, reminder_note: noteVal }).eq('id', id);
-  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
 }
 
 async function snoozeLeadReminder(id) {
@@ -1689,7 +1703,7 @@ async function loadFunnel() {
   renderFunnel();
 }
 
-function funnelIdPrefix() { return profile?.role === 'manager' ? 'mgmt' : 'staff'; }
+function funnelIdPrefix() { return isManagerLike() ? 'mgmt' : 'staff'; }
 
 function populateFunnelPeriods() {
   const prefix = funnelIdPrefix();
@@ -1851,8 +1865,10 @@ function renderLineChart(containerId, series, valueKey, color, formatValue) {
 }
 
 function renderTrends(entries) {
+  document.getElementById('reportsRevenueCard').classList.toggle('hidden', !canSeeRevenue());
   const series = computeDailySeries(entries, 30);
-  renderLineChart('revenueTrendChart', series, 'revenue', '#E07A3F', v => fmtMoney(v));
+  document.getElementById('revenueTrendPanel').classList.toggle('hidden', !canSeeRevenue());
+  if (canSeeRevenue()) renderLineChart('revenueTrendChart', series, 'revenue', '#E07A3F', v => fmtMoney(v));
   renderLineChart('rateTrendChart', series, 'rate', '#7FA593', v => v.toFixed(1) + '%');
 }
 
@@ -1884,6 +1900,7 @@ async function renderAuditLog() {
 function renderSourceBreakdown(entries) {
   const tbody = document.getElementById('reportsSourceTbody');
   const emptyEl = document.getElementById('reportsSourceEmpty');
+  document.getElementById('reportsSourceRevenueHeader').classList.toggle('hidden', !canSeeRevenue());
   if (!entries.length) {
     tbody.innerHTML = '';
     emptyEl.classList.remove('hidden');
@@ -1911,7 +1928,7 @@ function renderSourceBreakdown(entries) {
       <td>${escapeHtml(r.label)}</td>
       <td class="num">${r.visits}</td>
       <td class="num">${r.sold}</td>
-      <td class="num">${fmtMoney(r.revenue)}</td>
+      ${canSeeRevenue() ? `<td class="num">${fmtMoney(r.revenue)}</td>` : ''}
       <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(1)}%</td>
     </tr>`;
   }).join('');
@@ -1941,6 +1958,8 @@ function renderEntriesTable() {
   const allEntries = window.__mgmtEntriesCache || [];
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
   const entries = applyEntryFilters(allEntries);
+  const showRevenue = canSeeRevenue();
+  document.getElementById('mgmtEntryRevenueHeader').classList.toggle('hidden', !showRevenue);
 
   const entryTbody = document.getElementById('mgmtEntryTbody');
   const entryEmpty = document.getElementById('mgmtEntryEmpty');
@@ -1964,7 +1983,7 @@ function renderEntriesTable() {
         <td class="num">${e.visits}</td>
         <td class="num">${e.sold}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
-        <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
+        ${showRevenue ? `<td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>` : ''}
         <td>${escapeHtml(sourceLabel(e.source))}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
         <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
@@ -2206,12 +2225,12 @@ async function addLead() {
 
 async function toggleLeadFollowedUp(id, value) {
   await supabase.from('leads').update({ followed_up: value }).eq('id', id);
-  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
 }
 
 async function removeLead(id) {
   await supabase.from('leads').delete().eq('id', id);
-  await (profile.role === 'manager' ? renderMgmtHome() : renderStaffHome());
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
 }
 
 async function renderStaffHome() {
@@ -2340,10 +2359,12 @@ async function renderMgmtHome() {
   document.getElementById('mgmtTotalVisits').textContent = totalVisits;
   document.getElementById('mgmtTotalSold').textContent = totalSold;
   document.getElementById('mgmtTotalRevenue').textContent = fmtMoney(totalRevenue);
+  document.getElementById('mgmtRevenueStatCard').classList.toggle('hidden', !canSeeRevenue());
   document.getElementById('mgmtTargetInput').value = target;
 
   const staffTbody = document.getElementById('mgmtStaffTbody');
   const staffEmpty = document.getElementById('mgmtStaffEmpty');
+  document.getElementById('mgmtStaffRevenueHeader').classList.toggle('hidden', !canSeeRevenue());
   if (!staff.length) {
     staffTbody.innerHTML = '';
     staffEmpty.classList.remove('hidden');
@@ -2360,16 +2381,26 @@ async function renderMgmtHome() {
         <td>${escapeHtml(s.name)}</td>
         <td class="num">${visits}</td>
         <td class="num">${sold}</td>
-        <td class="num">${fmtMoney(revenue)}</td>
+        ${canSeeRevenue() ? `<td class="num">${fmtMoney(revenue)}</td>` : ''}
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(1)}%</td>
       </tr>`;
     }).join('');
   }
 
+  document.getElementById('mgmtManageStaffSection').classList.toggle('hidden', !isManager());
+
   document.getElementById('mgmtStaffList').innerHTML = staff.map(s => `
     <div class="staff-row">
-      <span style="font-size:13.5px;">${escapeHtml(s.name)} <span style="color:var(--text-faint);">${escapeHtml(s.email)}</span> ${s.role === 'manager' ? '<span class="badge">manager</span>' : ''}</span>
-      ${s.id === profile.id ? '<span style="color:var(--text-faint);font-size:12px;">(you)</span>' : `<button class="ghost" onclick="removeStaffMgmt('${s.id}')">remove</button>`}
+      <span style="font-size:13.5px;">${escapeHtml(s.name)} <span style="color:var(--text-faint);">${escapeHtml(s.email)}</span> ${s.role === 'manager' ? '<span class="badge">manager</span>' : ''}${s.role === 'supervisor' ? '<span class="badge">supervisor</span>' : ''}</span>
+      <span style="display:flex;align-items:center;gap:10px;">
+        ${s.id === profile.id ? '' : `
+          <select class="role-select" style="width:auto;font-size:12px;padding:4px 8px;" onchange="updateStaffRole('${s.id}', this.value)">
+            <option value="staff" ${s.role === 'staff' ? 'selected' : ''}>Staff</option>
+            <option value="supervisor" ${s.role === 'supervisor' ? 'selected' : ''}>Supervisor</option>
+          </select>
+        `}
+        ${s.id === profile.id ? '<span style="color:var(--text-faint);font-size:12px;">(you)</span>' : `<button class="ghost" onclick="removeStaffMgmt('${s.id}')">remove</button>`}
+      </span>
     </div>
   `).join('') || `<div class="empty">No staff yet.</div>`;
 
@@ -2481,6 +2512,15 @@ async function removeStaffMgmt(id) {
   await renderMgmtHome();
 }
 
+async function updateStaffRole(id, role) {
+  const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+  if (error) {
+    alert('Could not update role.');
+    return;
+  }
+  await renderMgmtHome();
+}
+
 async function logEntryAudit({ entryId, entryDate, entryStaffId, action, summary }) {
   await supabase.from('entry_audit_log').insert({
     entry_id: entryId,
@@ -2503,6 +2543,7 @@ function buildEntryDiffSummary(before, after) {
   ];
   const changes = [];
   fields.forEach(([key, label, fmt]) => {
+    if (!(key in after)) return; // field wasn't editable/touched (e.g. revenue, hidden from supervisors)
     const a = before[key], b = after[key];
     const same = key === 'revenue' ? Number(a || 0) === Number(b || 0) : a === b;
     if (!same) changes.push(`${label}: ${fmt(a)} → ${fmt(b)}`);
@@ -2535,6 +2576,7 @@ function openEditEntryModal(id) {
   document.getElementById('editEntrySold').value = entry.sold;
   document.getElementById('editEntryMemberName').value = entry.member_name || '';
   document.getElementById('editEntryRevenue').value = entry.revenue != null ? entry.revenue : '';
+  document.getElementById('editEntryRevenueField').classList.toggle('hidden', !canSeeRevenue());
   document.getElementById('editEntrySource').value = entry.source || '';
   document.getElementById('editEntryError').textContent = '';
   document.getElementById('editEntryModalOverlay').classList.remove('hidden');
@@ -2550,15 +2592,20 @@ async function saveEditEntry() {
   const visits = parseInt(document.getElementById('editEntryVisits').value, 10);
   const sold = parseInt(document.getElementById('editEntrySold').value, 10);
   const memberName = document.getElementById('editEntryMemberName').value.trim();
-  const revenueInput = document.getElementById('editEntryRevenue').value;
-  const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
   const source = document.getElementById('editEntrySource').value || null;
   const errEl = document.getElementById('editEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
   if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale."; return; }
-  if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
-  const after = { date, visits, sold, member_name: memberName || null, revenue, source };
+  const after = { date, visits, sold, member_name: memberName || null, source };
+  // Only touch revenue at all if this user is even allowed to see/edit it —
+  // otherwise leave the entry's existing revenue value alone entirely.
+  if (canSeeRevenue()) {
+    const revenueInput = document.getElementById('editEntryRevenue').value;
+    const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
+    if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
+    after.revenue = revenue;
+  }
   const { error } = await supabase
     .from('entries')
     .update(after)
@@ -2608,11 +2655,18 @@ async function saveTeamNote() {
 function exportCsv() {
   const entries = applyEntryFilters(window.__mgmtEntriesCache || []);
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
-  const rows = [['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name', 'Revenue', 'Source', 'Conversion rate']];
+  const showRevenue = canSeeRevenue();
+  const header = ['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name'];
+  if (showRevenue) header.push('Revenue');
+  header.push('Source', 'Conversion rate');
+  const rows = [header];
   [...entries].sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
     const s = staffById[e.staff_id];
     const rate = e.visits > 0 ? ((e.sold / e.visits) * 100).toFixed(1) : '0.0';
-    rows.push([e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || '', e.revenue != null ? e.revenue : '', sourceLabel(e.source), rate + '%']);
+    const row = [e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || ''];
+    if (showRevenue) row.push(e.revenue != null ? e.revenue : '');
+    row.push(sourceLabel(e.source), rate + '%');
+    rows.push(row);
   });
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -2628,7 +2682,7 @@ function exportCsv() {
 // don't put top-level functions on window automatically).
 Object.assign(window, {
   handleLogoClick, signOut, openPwModal, closePwModal,
-  removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv,
+  removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv, updateStaffRole,
   openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
   selectDmContact, saveLeadReminder, snoozeLeadReminder, openNameModal,
 });
