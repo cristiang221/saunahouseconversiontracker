@@ -14,6 +14,7 @@ create table public.profiles (
   role text not null default 'staff' check (role in ('staff', 'manager', 'supervisor')),
   avatar_emoji text,
   avatar_color text,
+  monthly_goal int check (monthly_goal >= 0),
   created_at timestamptz not null default now()
 );
 

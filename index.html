@@ -175,6 +175,51 @@
   .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin: 0 0 6px; }
   .stat-value { font-family: 'Fraunces', serif; font-size: 24px; font-weight: 500; }
 
+  .goal-panel { text-align: center; }
+  .goal-empty { padding: 8px 0 4px; }
+  .goal-empty i { display: block; font-size: 26px; margin-bottom: 8px; color: var(--text-faint); }
+  .goal-empty p { color: var(--text-dim); margin: 0 0 14px; font-size: 13.5px; }
+  .goal-meter-wrap { padding: 4px 0; }
+  .goal-meter-label { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-dim); margin-bottom: 14px; }
+  .goal-meter-label strong { color: var(--text); }
+  .goal-meter-track {
+    position: relative;
+    width: 100%;
+    height: 26px;
+    border-radius: 999px;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    margin: 0 0 14px;
+    transition: box-shadow 0.3s ease;
+  }
+  .goal-meter-fill {
+    height: 100%;
+    min-width: 26px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--sage), var(--ember));
+    transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+  }
+  .goal-meter-flame {
+    position: absolute;
+    top: 50%;
+    right: -2px;
+    transform: translate(50%, -50%);
+    font-size: 20px;
+    filter: drop-shadow(0 0 4px rgba(224, 122, 63, 0.6));
+    animation: goal-flame-flicker 1.4s ease-in-out infinite;
+  }
+  @keyframes goal-flame-flicker {
+    0%, 100% { transform: translate(50%, -50%) scale(1) rotate(-3deg); }
+    50% { transform: translate(50%, -50%) scale(1.15) rotate(3deg); }
+  }
+  .goal-meter-track.goal-hit { animation: goal-hit-pulse 1.8s ease-in-out infinite; }
+  @keyframes goal-hit-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px var(--ember), 0 0 14px rgba(224, 122, 63, 0.4); }
+    50% { box-shadow: 0 0 0 2px var(--ember), 0 0 28px rgba(224, 122, 63, 0.75); }
+  }
+  .goal-hit-text { font-family: 'Fraunces', serif; font-size: 17px; color: var(--ember); margin: 0; }
+
   section { margin-bottom: 28px; }
   .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
 
@@ -610,6 +655,19 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="goalModalOverlay">
+  <div class="panel">
+    <h2 style="margin-bottom:14px;">Set your monthly goal</h2>
+    <div class="field">
+      <label>Memberships you want to sell this month</label>
+      <input type="number" id="goalInput" min="0" step="1" placeholder="e.g. 10">
+    </div>
+    <button class="primary" id="goalSaveBtn">Save goal</button>
+    <button class="link" style="margin-top:12px;" id="goalCancelBtn">Cancel</button>
+    <p class="error" id="goalError"></p>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="nameModalOverlay">
   <div class="panel">
     <h2 style="margin-bottom:14px;">Change display name</h2>
@@ -701,6 +759,7 @@
           <div class="account-email" id="sidebarAccountEmail"></div>
         </div>
         <button class="link" onclick="openAvatarModal()">Edit avatar</button>
+        <button class="link" id="sidebarGoalBtn" onclick="openGoalModal()">Set your goal</button>
         <button class="link" onclick="openNameModal()">Change name</button>
         <button class="link" onclick="openPwModal()">Change password</button>
         <button onclick="signOut()">Log out</button>
@@ -743,6 +802,11 @@
               <div class="stat-value" id="staffCommission">$0.00</div>
             </div>
           </div>
+
+          <section>
+            <div class="section-head"><h2>Your goal</h2></div>
+            <div class="panel goal-panel" id="goalPanel"></div>
+          </section>
         </div>
 
         <div class="page hidden" id="page-staff-entries">
@@ -1467,6 +1531,7 @@ function buildSidebar(role) {
     </button>
   `).join('');
   updateNavBadges();
+  document.getElementById('sidebarGoalBtn').classList.toggle('hidden', role !== 'staff');
 }
 
 function updateNavBadges() {
@@ -1605,6 +1670,56 @@ async function saveAvatar() {
   updateSidebarAvatarPreview();
   await loadLeaderboard();
   await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
+}
+
+function openGoalModal() {
+  document.getElementById('goalInput').value = profile.monthly_goal != null ? profile.monthly_goal : '';
+  document.getElementById('goalError').textContent = '';
+  document.getElementById('goalModalOverlay').classList.remove('hidden');
+}
+function closeGoalModal() { document.getElementById('goalModalOverlay').classList.add('hidden'); }
+
+async function saveGoal() {
+  const errEl = document.getElementById('goalError');
+  const raw = document.getElementById('goalInput').value;
+  const goal = raw === '' ? null : parseInt(raw, 10);
+  if (raw !== '' && (isNaN(goal) || goal < 0)) { errEl.textContent = 'Enter a positive number, or leave blank to clear your goal.'; return; }
+  const { error } = await supabase.from('profiles').update({ monthly_goal: goal }).eq('id', profile.id);
+  if (error) { errEl.textContent = error.message; return; }
+  profile.monthly_goal = goal;
+  closeGoalModal();
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
+}
+
+function renderGoalPanel(soldThisMonth) {
+  const panel = document.getElementById('goalPanel');
+  if (!panel) return;
+  const goal = profile.monthly_goal;
+  if (!goal) {
+    panel.innerHTML = `
+      <div class="goal-empty">
+        <i class="ti ti-target"></i>
+        <p>No goal set yet — pick a number and chase it.</p>
+        <button class="ghost" onclick="openGoalModal()">Set your goal</button>
+      </div>
+    `;
+    return;
+  }
+  const pct = Math.min(100, Math.round((soldThisMonth / goal) * 100));
+  const hit = soldThisMonth >= goal;
+  panel.innerHTML = `
+    <div class="goal-meter-wrap">
+      <div class="goal-meter-label"><strong>${soldThisMonth}</strong> of <strong>${goal}</strong> sold this month — ${pct}%</div>
+      <div class="goal-meter-track ${hit ? 'goal-hit' : ''}">
+        <div class="goal-meter-fill" style="width:${pct}%;">
+          <span class="goal-meter-flame">🔥</span>
+        </div>
+      </div>
+      ${hit
+        ? `<p class="goal-hit-text">Goal smashed — nice work! 🎉</p>`
+        : `<button class="link" onclick="openGoalModal()">Edit goal</button>`}
+    </div>
+  `;
 }
 
 function openNameModal() {
@@ -2922,6 +3037,11 @@ async function renderStaffHome() {
     .reduce((a, w) => a + calcWinbackCommission(w), 0);
   document.getElementById('staffCommission').textContent = fmtMoney(entryCommissionThisMonth + winbackCommissionThisMonth);
 
+  const soldThisMonth = rows
+    .filter(e => e.date.slice(0, 7) === monthPrefix)
+    .reduce((a, e) => a + e.sold, 0);
+  renderGoalPanel(soldThisMonth);
+
   const tbody = document.getElementById('staffEntryTbody');
   const emptyEl = document.getElementById('staffEntryEmpty');
   if (!rows.length) {
@@ -3365,7 +3485,7 @@ Object.assign(window, {
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv, updateStaffRole,
   openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
   selectDmContact, saveLeadReminder, snoozeLeadReminder, openNameModal, printWallOfFame,
-  openAvatarModal, pickAvatarColor, pickAvatarEmoji,
+  openAvatarModal, pickAvatarColor, pickAvatarEmoji, openGoalModal,
   addWinbackNote, openWinbackWinField, confirmWinbackWon, markWinbackLost, reopenWinback, removeWinbackLead,
 });
 
@@ -3422,6 +3542,8 @@ document.getElementById('nameSaveBtn').addEventListener('click', saveName);
 document.getElementById('nameCancelBtn').addEventListener('click', closeNameModal);
 document.getElementById('avatarSaveBtn').addEventListener('click', saveAvatar);
 document.getElementById('avatarCancelBtn').addEventListener('click', closeAvatarModal);
+document.getElementById('goalSaveBtn').addEventListener('click', saveGoal);
+document.getElementById('goalCancelBtn').addEventListener('click', closeGoalModal);
 document.getElementById('dailyRecapCloseBtn').addEventListener('click', closeDailyRecap);
 document.getElementById('leadReminderCloseBtn').addEventListener('click', closeLeadReminders);
 document.getElementById('scheduleUploadBtn').addEventListener('click', uploadSchedule);
