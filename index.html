@@ -1145,13 +1145,13 @@
           <section id="winbackUploadSection">
             <div class="section-head"><h2>Add winback targets</h2></div>
             <div class="panel">
-              <p class="sub" style="margin-bottom:12px;">Upload a CSV/text file or paste a list of former members to bring back — one per line, <code>Name, Phone</code> (phone optional).</p>
+              <p class="sub" style="margin-bottom:12px;">Upload a CSV, TXT, or Excel file (.xlsx/.xls), or paste a list, of former members to bring back — one per line/row, <code>Name, Phone</code> (phone optional).</p>
               <div class="field">
                 <label>Upload a file</label>
                 <div class="dropzone" id="winbackDropzone">
                   <i class="ti ti-upload"></i>
-                  <span id="winbackDropzoneText">Drag a file here, or click to browse</span>
-                  <input type="file" id="winbackFileInput" accept=".csv,.txt" style="display:none;">
+                  <span id="winbackDropzoneText">Drag a CSV, TXT, or Excel file here, or click to browse</span>
+                  <input type="file" id="winbackFileInput" accept=".csv,.txt,.xlsx,.xls" style="display:none;">
                 </div>
               </div>
               <div class="field">
@@ -1263,6 +1263,7 @@
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -2050,6 +2051,18 @@ function parseWinbackInput(text) {
     .filter(row => row.name);
 }
 
+function parseWinbackWorkbook(buffer) {
+  const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
+  return rows
+    .map(row => ({
+      name: String(row[0] == null ? '' : row[0]).trim(),
+      phone: row[1] == null || row[1] === '' ? null : String(row[1]).trim(),
+    }))
+    .filter(row => row.name && !/^name$/i.test(row.name));
+}
+
 async function addWinbackTargets() {
   const errEl = document.getElementById('winbackAddError');
   const noticeEl = document.getElementById('winbackAddNotice');
@@ -2057,13 +2070,21 @@ async function addWinbackTargets() {
   noticeEl.classList.add('hidden');
 
   const fileInput = document.getElementById('winbackFileInput');
-  const pasteText = document.getElementById('winbackPasteInput').value;
-  let text = pasteText;
-  if (fileInput.files && fileInput.files[0]) {
-    text = await fileInput.files[0].text();
+  const file = fileInput.files && fileInput.files[0];
+  let rows;
+  if (file && /\.(xlsx|xls)$/i.test(file.name)) {
+    try {
+      rows = parseWinbackWorkbook(await file.arrayBuffer());
+    } catch (e) {
+      errEl.textContent = 'Could not read that Excel file — is it a valid .xlsx/.xls?';
+      return;
+    }
+  } else if (file) {
+    rows = parseWinbackInput(await file.text());
+  } else {
+    rows = parseWinbackInput(document.getElementById('winbackPasteInput').value);
   }
 
-  const rows = parseWinbackInput(text);
   if (!rows.length) {
     errEl.textContent = 'Add at least one name (upload a file or paste a list).';
     return;
@@ -2075,7 +2096,7 @@ async function addWinbackTargets() {
   if (error) { errEl.textContent = error.message; return; }
 
   fileInput.value = '';
-  document.getElementById('winbackDropzoneText').textContent = 'Drag a file here, or click to browse';
+  document.getElementById('winbackDropzoneText').textContent = 'Drag a CSV, TXT, or Excel file here, or click to browse';
   document.getElementById('winbackPasteInput').value = '';
   noticeEl.textContent = `Added ${rows.length} to the winback pool.`;
   noticeEl.classList.remove('hidden');
