@@ -26,6 +26,7 @@ create table public.entries (
   member_name text,
   revenue numeric(10, 2) check (revenue >= 0),
   source text check (source in ('walk-in', 'referral', 'social', 'google', 'event', 'other')),
+  plan_type text check (plan_type in ('paid_in_full_unlimited', 'monthly_membership')),
   created_at timestamptz not null default now()
 );
 

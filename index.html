@@ -546,6 +546,14 @@
       <input type="number" id="editEntryRevenue" min="0" step="0.01">
     </div>
     <div class="field">
+      <label>Plan type (for commission)</label>
+      <select id="editEntryPlanType">
+        <option value="">Not a membership sale</option>
+        <option value="paid_in_full_unlimited">Paid-in-full Unlimited</option>
+        <option value="monthly_membership">Monthly Membership</option>
+      </select>
+    </div>
+    <div class="field">
       <label>Source</label>
       <select id="editEntrySource">
         <option value="">Not specified</option>
@@ -730,6 +738,10 @@
               <p class="stat-label">Memberships sold</p>
               <div class="stat-value" id="staffSold">0</div>
             </div>
+            <div class="stat-card">
+              <p class="stat-label">Your commission (this month)</p>
+              <div class="stat-value" id="staffCommission">$0.00</div>
+            </div>
           </div>
         </div>
 
@@ -758,6 +770,14 @@
               <div class="field">
                 <label>Sale amount ($)</label>
                 <input type="number" id="staffEntryRevenue" min="0" step="0.01" placeholder="e.g. 89">
+              </div>
+              <div class="field">
+                <label>Plan type (for commission — only if a membership was sold)</label>
+                <select id="staffEntryPlanType">
+                  <option value="">Not a membership sale</option>
+                  <option value="paid_in_full_unlimited">Paid-in-full Unlimited</option>
+                  <option value="monthly_membership">Monthly Membership</option>
+                </select>
               </div>
               <div class="field">
                 <label>Source (where they came from)</label>
@@ -793,7 +813,7 @@
             <div class="section-head"><h2>Your sales</h2></div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Member</th><th>Sold</th><th>Revenue</th></tr></thead>
+                <thead><tr><th>Date</th><th>Member</th><th>Sold</th><th>Revenue</th><th>Plan</th><th>Commission</th></tr></thead>
                 <tbody id="staffSalesTbody"></tbody>
               </table>
               <div class="empty hidden" id="staffSalesEmpty"><i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — the first sale's coming.</span></div>
@@ -864,6 +884,10 @@
               <p class="stat-label">Total revenue</p>
               <div class="stat-value" id="mgmtTotalRevenue">$0</div>
             </div>
+            <div class="stat-card" id="mgmtCommissionStatCard">
+              <p class="stat-label">Total commission owed</p>
+              <div class="stat-value" id="mgmtTotalCommission">$0</div>
+            </div>
           </div>
 
           <section>
@@ -919,7 +943,7 @@
             </div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th id="mgmtEntryRevenueHeader">Revenue</th><th>Source</th><th>Rate</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Staff</th><th>Visits</th><th>Sold</th><th>Member</th><th id="mgmtEntryRevenueHeader">Revenue</th><th id="mgmtEntryCommissionHeader">Commission</th><th>Source</th><th>Rate</th><th></th></tr></thead>
                 <tbody id="mgmtEntryTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtEntryEmpty">No entries logged yet.</div>
@@ -949,7 +973,7 @@
             </div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th><th>Revenue</th></tr></thead>
+                <thead><tr><th>Date</th><th>Staff</th><th>Member</th><th>Sold</th><th>Revenue</th><th>Plan</th><th>Commission</th></tr></thead>
                 <tbody id="mgmtSalesTbody"></tbody>
               </table>
               <div class="empty hidden" id="mgmtSalesEmpty">No sales logged yet.</div>
@@ -1184,7 +1208,7 @@
             <div class="section-head"><h2>Winback commission</h2></div>
             <div class="panel" style="padding: 8px 22px;">
               <table>
-                <thead><tr><th>Staff</th><th>Won</th><th id="winbackSummaryRevenueHeader">Revenue</th></tr></thead>
+                <thead><tr><th>Staff</th><th>Won</th><th id="winbackSummaryRevenueHeader">Revenue</th><th id="winbackSummaryCommissionHeader">Commission</th></tr></thead>
                 <tbody id="winbackSummaryTbody"></tbody>
               </table>
               <div class="empty hidden" id="winbackSummaryEmpty">No wins logged yet.</div>
@@ -1338,6 +1362,31 @@ function sourceLabel(source) { return source ? (SOURCE_LABELS[source] || source)
 function isManagerLike() { return !!profile && (profile.role === 'manager' || profile.role === 'supervisor'); }
 function isManager() { return !!profile && profile.role === 'manager'; }
 function canSeeRevenue() { return isManager(); }
+
+// Sauna House commission plan:
+//   - Paid-in-full Unlimited: flat $50 per membership sold.
+//   - Monthly Membership: 10% of the billed amount (the entry's revenue).
+//   - Winback: 15% of the first month's dues (the winback lead's revenue).
+// Eligibility conditions from the plan document (processed through
+// Square/Booker, not refunded/charged back, membership stays active 30
+// days) can't be verified here — this app has no payment processor
+// integration, so commission is computed the same trust-based way
+// revenue already is.
+const PLAN_TYPE_LABELS = {
+  paid_in_full_unlimited: 'Paid-in-full Unlimited',
+  monthly_membership: 'Monthly Membership',
+};
+function planTypeLabel(planType) { return planType ? (PLAN_TYPE_LABELS[planType] || planType) : 'Not a membership sale'; }
+function calcEntryCommission(e) {
+  if (!e || !e.sold || !e.plan_type) return 0;
+  if (e.plan_type === 'paid_in_full_unlimited') return e.sold * 50;
+  if (e.plan_type === 'monthly_membership') return (Number(e.revenue) || 0) * 0.10;
+  return 0;
+}
+function calcWinbackCommission(w) {
+  if (!w || w.status !== 'won') return 0;
+  return (Number(w.revenue) || 0) * 0.15;
+}
 
 const AVATAR_COLORS = ['#E07A3F', '#C1553F', '#E0B85F', '#7FA593', '#6E90B0', '#8F7FE0', '#C79ECF', '#5FBFA0'];
 const AVATAR_EMOJIS = ['🔥', '💧', '🌿', '☀️', '⭐', '🏆', '🎯', '💪', '😎', '🦦', '🐢', '🦥', '🐬', '🌊', '🧊', '🍃', '🌙', '⚡', '🌵', '🐝', '🦋', '🍄', '🌸', '🎧'];
@@ -2141,8 +2190,9 @@ function renderWinbackCard(w, notes) {
       <div class="lead-note-body">${escapeHtml(n.body)}</div>
     </div>
   `).join('');
+  const canSeeThisWinbackMoney = canSeeRevenue() || w.won_by === profile.id;
   const wonLine = w.status === 'won'
-    ? `<div class="lead-card-notes">Won by ${escapeHtml(winbackStaffName(w.won_by))}${canSeeRevenue() && w.revenue != null ? ` — ${fmtMoney(w.revenue)}` : ''}</div>`
+    ? `<div class="lead-card-notes">Won by ${escapeHtml(winbackStaffName(w.won_by))}${canSeeThisWinbackMoney && w.revenue != null ? ` — ${fmtMoney(w.revenue)} (commission: ${fmtMoney(calcWinbackCommission(w))})` : ''}</div>`
     : '';
   const actions = (w.status === 'won' || w.status === 'lost')
     ? (isManagerLike() ? `<button class="ghost" onclick="reopenWinback('${w.id}')">reopen</button> <button class="ghost" onclick="removeWinbackLead('${w.id}')">delete</button>` : '')
@@ -2201,12 +2251,14 @@ function renderWinbackList() {
 function renderWinbackSummary() {
   const all = window.__winbackLeadsCache || [];
   document.getElementById('winbackSummaryRevenueHeader').classList.toggle('hidden', !canSeeRevenue());
+  document.getElementById('winbackSummaryCommissionHeader').classList.toggle('hidden', !canSeeRevenue());
   const won = all.filter(w => w.status === 'won' && w.won_by);
   const byStaff = {};
   won.forEach(w => {
-    const b = (byStaff[w.won_by] = byStaff[w.won_by] || { count: 0, revenue: 0 });
+    const b = (byStaff[w.won_by] = byStaff[w.won_by] || { count: 0, revenue: 0, commission: 0 });
     b.count += 1;
     b.revenue += Number(w.revenue) || 0;
+    b.commission += calcWinbackCommission(w);
   });
   const rows = Object.entries(byStaff)
     .map(([id, b]) => ({ name: winbackStaffName(id), ...b }))
@@ -2223,6 +2275,7 @@ function renderWinbackSummary() {
     <td>${escapeHtml(r.name)}</td>
     <td class="num">${r.count}</td>
     ${canSeeRevenue() ? `<td class="num">${fmtMoney(r.revenue)}</td>` : ''}
+    ${canSeeRevenue() ? `<td class="num">${fmtMoney(r.commission)}</td>` : ''}
   </tr>`).join('');
 }
 
@@ -2551,6 +2604,7 @@ function renderEntriesTable() {
   const entries = applyEntryFilters(allEntries);
   const showRevenue = canSeeRevenue();
   document.getElementById('mgmtEntryRevenueHeader').classList.toggle('hidden', !showRevenue);
+  document.getElementById('mgmtEntryCommissionHeader').classList.toggle('hidden', !showRevenue);
 
   const entryTbody = document.getElementById('mgmtEntryTbody');
   const entryEmpty = document.getElementById('mgmtEntryEmpty');
@@ -2577,6 +2631,7 @@ function renderEntriesTable() {
         <td class="num">${e.sold}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
         ${showRevenue ? `<td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>` : ''}
+        ${showRevenue ? `<td class="num">${fmtMoney(calcEntryCommission(e))}</td>` : ''}
         <td>${escapeHtml(sourceLabel(e.source))}</td>
         <td class="rate-cell ${hit ? 'hit' : 'miss'}">${rate.toFixed(0)}%</td>
         <td><button class="ghost" onclick="openEditEntryModal('${e.id}')">edit</button> <button class="ghost" onclick="removeMgmtEntry('${e.id}')">delete</button></td>
@@ -2608,6 +2663,8 @@ function renderSalesTable() {
         <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="num">${e.sold}</td>
         <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
+        <td>${escapeHtml(planTypeLabel(e.plan_type))}</td>
+        <td class="num">${fmtMoney(calcEntryCommission(e))}</td>
       </tr>`;
     }).join('');
   }
@@ -2851,6 +2908,20 @@ async function renderStaffHome() {
   document.getElementById('staffVisits').textContent = visits;
   document.getElementById('staffSold').textContent = sold;
 
+  const monthPrefix = localDateStr(new Date()).slice(0, 7);
+  const entryCommissionThisMonth = rows
+    .filter(e => e.date.slice(0, 7) === monthPrefix)
+    .reduce((a, e) => a + calcEntryCommission(e), 0);
+  const { data: ownWinbackWins } = await supabase
+    .from('winback_leads')
+    .select('revenue, status, won_by, won_at')
+    .eq('won_by', profile.id)
+    .eq('status', 'won');
+  const winbackCommissionThisMonth = (ownWinbackWins || [])
+    .filter(w => w.won_at && w.won_at.slice(0, 7) === monthPrefix)
+    .reduce((a, w) => a + calcWinbackCommission(w), 0);
+  document.getElementById('staffCommission').textContent = fmtMoney(entryCommissionThisMonth + winbackCommissionThisMonth);
+
   const tbody = document.getElementById('staffEntryTbody');
   const emptyEl = document.getElementById('staffEntryEmpty');
   if (!rows.length) {
@@ -2884,6 +2955,8 @@ async function renderStaffHome() {
       <td>${escapeHtml(e.member_name || '—')}</td>
       <td class="num">${e.sold}</td>
       <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
+      <td>${escapeHtml(planTypeLabel(e.plan_type))}</td>
+      <td class="num">${fmtMoney(calcEntryCommission(e))}</td>
     </tr>`).join('');
   }
 
@@ -2912,19 +2985,21 @@ async function addStaffEntry() {
   const revenueInput = document.getElementById('staffEntryRevenue').value;
   const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
   const source = document.getElementById('staffEntrySource').value || null;
+  const planType = document.getElementById('staffEntryPlanType').value || null;
   const errEl = document.getElementById('staffEntryError');
   if (!date) { errEl.textContent = 'Pick a date.'; return; }
   if (isNaN(visits) || isNaN(sold)) { errEl.textContent = 'Enter visits and memberships sold.'; return; }
   if (sold > 0 && !memberName) { errEl.textContent = "Enter the member's name for the sale (first name + last initial)."; return; }
   if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
   errEl.textContent = '';
-  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold, member_name: memberName || null, revenue, source });
+  const { error } = await supabase.from('entries').insert({ staff_id: profile.id, date, visits, sold, member_name: memberName || null, revenue, source, plan_type: planType });
   if (error) { errEl.textContent = error.message; return; }
   document.getElementById('staffEntryVisits').value = '';
   document.getElementById('staffEntrySold').value = '';
   document.getElementById('staffEntryMemberName').value = '';
   document.getElementById('staffEntryRevenue').value = '';
   document.getElementById('staffEntrySource').value = '';
+  document.getElementById('staffEntryPlanType').value = '';
   if (sold > 0) launchConfetti();
   await renderStaffHome();
 }
@@ -2954,6 +3029,12 @@ async function renderMgmtHome() {
   document.getElementById('mgmtTotalVisits').textContent = totalVisits;
   document.getElementById('mgmtTotalSold').textContent = totalSold;
   document.getElementById('mgmtTotalRevenue').textContent = fmtMoney(totalRevenue);
+
+  const entryCommission = entries.reduce((a, e) => a + calcEntryCommission(e), 0);
+  const { data: wonWinbacks } = await supabase.from('winback_leads').select('revenue, status').eq('status', 'won');
+  const winbackCommission = (wonWinbacks || []).reduce((a, w) => a + calcWinbackCommission(w), 0);
+  document.getElementById('mgmtTotalCommission').textContent = fmtMoney(entryCommission + winbackCommission);
+  document.getElementById('mgmtCommissionStatCard').classList.toggle('hidden', !canSeeRevenue());
   document.getElementById('mgmtRevenueStatCard').classList.toggle('hidden', !canSeeRevenue());
   document.getElementById('mgmtTargetInput').value = target;
 
@@ -3134,6 +3215,7 @@ function buildEntryDiffSummary(before, after) {
     ['sold', 'sold', v => String(v)],
     ['member_name', 'member', v => v || '—'],
     ['revenue', 'revenue', v => (v != null ? fmtMoney(v) : '—')],
+    ['plan_type', 'plan', v => planTypeLabel(v)],
     ['source', 'source', v => sourceLabel(v)],
   ];
   const changes = [];
@@ -3172,6 +3254,8 @@ function openEditEntryModal(id) {
   document.getElementById('editEntryMemberName').value = entry.member_name || '';
   document.getElementById('editEntryRevenue').value = entry.revenue != null ? entry.revenue : '';
   document.getElementById('editEntryRevenueField').classList.toggle('hidden', !canSeeRevenue());
+  document.getElementById('editEntryPlanType').value = entry.plan_type || '';
+  document.getElementById('editEntryPlanType').closest('.field').classList.toggle('hidden', !canSeeRevenue());
   document.getElementById('editEntrySource').value = entry.source || '';
   document.getElementById('editEntryError').textContent = '';
   document.getElementById('editEntryModalOverlay').classList.remove('hidden');
@@ -3200,6 +3284,7 @@ async function saveEditEntry() {
     const revenue = revenueInput === '' ? null : parseFloat(revenueInput);
     if (sold > 0 && (revenue === null || isNaN(revenue))) { errEl.textContent = 'Enter the sale amount.'; return; }
     after.revenue = revenue;
+    after.plan_type = document.getElementById('editEntryPlanType').value || null;
   }
   const { error } = await supabase
     .from('entries')
@@ -3252,14 +3337,14 @@ function exportCsv() {
   const staffById = Object.fromEntries((window.__mgmtStaffCache || []).map(s => [s.id, s]));
   const showRevenue = canSeeRevenue();
   const header = ['Date', 'Staff', 'Non-member visits', 'Memberships sold', 'Member name'];
-  if (showRevenue) header.push('Revenue');
+  if (showRevenue) header.push('Revenue', 'Plan type', 'Commission');
   header.push('Source', 'Conversion rate');
   const rows = [header];
   [...entries].sort((a, b) => a.date.localeCompare(b.date)).forEach(e => {
     const s = staffById[e.staff_id];
     const rate = e.visits > 0 ? ((e.sold / e.visits) * 100).toFixed(1) : '0.0';
     const row = [e.date, s ? s.name : 'Removed staff', e.visits, e.sold, e.member_name || ''];
-    if (showRevenue) row.push(e.revenue != null ? e.revenue : '');
+    if (showRevenue) row.push(e.revenue != null ? e.revenue : '', planTypeLabel(e.plan_type), calcEntryCommission(e));
     row.push(sourceLabel(e.source), rate + '%');
     rows.push(row);
   });
