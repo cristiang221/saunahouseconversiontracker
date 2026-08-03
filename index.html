@@ -299,6 +299,9 @@
   .lead-note-body { font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
   .badge.pending { color: var(--ember); border-color: var(--ember); }
   .badge.done { color: var(--sage); border-color: var(--sage); }
+  .badge.lost { color: var(--text-faint); border-color: var(--text-faint); }
+  .winback-phone { color: var(--text-dim); font-size: 12.5px; text-decoration: none; }
+  .winback-phone:hover { color: var(--sage); }
   .lead-stage-select { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 6px; }
 
   .funnel-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; }
@@ -1125,6 +1128,53 @@
           </section>
         </div>
 
+        <div class="page hidden" id="page-winback">
+          <section id="winbackUploadSection">
+            <div class="section-head"><h2>Add winback targets</h2></div>
+            <div class="panel">
+              <p class="sub" style="margin-bottom:12px;">Upload a CSV/text file or paste a list of former members to bring back — one per line, <code>Name, Phone</code> (phone optional).</p>
+              <div class="field">
+                <label>Upload a file</label>
+                <input type="file" id="winbackFileInput" accept=".csv,.txt">
+              </div>
+              <div class="field">
+                <label>...or paste names directly</label>
+                <textarea id="winbackPasteInput" rows="4" placeholder="Jane Doe, 555-123-4567&#10;John Smith"></textarea>
+              </div>
+              <button class="primary" style="width:auto;" id="winbackAddBtn">Add to winback pool</button>
+              <p class="error" id="winbackAddError"></p>
+              <p class="notice hidden" id="winbackAddNotice"></p>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h2>Winback pool</h2>
+              <select id="winbackStatusFilter" style="width:auto;">
+                <option value="active">Open + contacted</option>
+                <option value="won">Won</option>
+                <option value="lost">Lost</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+            <div class="panel">
+              <div id="winbackList"></div>
+              <div class="empty hidden" id="winbackEmpty"><i class="ti ti-door empty-icon"></i><span class="empty-warm-text">Quiet so far — upload a list above to get the pool started.</span></div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Winback commission</h2></div>
+            <div class="panel" style="padding: 8px 22px;">
+              <table>
+                <thead><tr><th>Staff</th><th>Won</th><th id="winbackSummaryRevenueHeader">Revenue</th></tr></thead>
+                <tbody id="winbackSummaryTbody"></tbody>
+              </table>
+              <div class="empty hidden" id="winbackSummaryEmpty">No wins logged yet.</div>
+            </div>
+          </section>
+        </div>
+
         <div class="page hidden" id="page-leaderboard">
           <section>
             <div class="section-head">
@@ -1310,6 +1360,7 @@ const NAV_ITEMS = {
     { id: 'staff-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'staff-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'staff-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'winback', label: 'Winback', icon: 'ti-phone-call' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
     { id: 'dms', label: 'Messages', icon: 'ti-mail' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
@@ -1319,6 +1370,7 @@ const NAV_ITEMS = {
     { id: 'mgmt-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'mgmt-sales', label: 'Sales', icon: 'ti-receipt' },
     { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'winback', label: 'Winback', icon: 'ti-phone-call' },
     { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
     { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
     { id: 'mgmt-schedule', label: 'Schedule', icon: 'ti-calendar' },
@@ -1330,6 +1382,7 @@ const NAV_ITEMS = {
     { id: 'mgmt-dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
     { id: 'mgmt-entries', label: 'Entries', icon: 'ti-clipboard-list' },
     { id: 'mgmt-followups', label: 'Follow-ups', icon: 'ti-user-search' },
+    { id: 'winback', label: 'Winback', icon: 'ti-phone-call' },
     { id: 'mgmt-team', label: 'Team', icon: 'ti-users' },
     { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
     { id: 'mgmt-schedule', label: 'Schedule', icon: 'ti-calendar' },
@@ -1545,6 +1598,7 @@ async function route() {
   await loadFunnel();
   await loadDMs();
   subscribeDMs();
+  await loadWinback();
   showPage(isManagerLike() ? 'mgmt-dashboard' : 'staff-dashboard');
 }
 
@@ -1962,6 +2016,228 @@ function maybeShowLeadReminders(leads) {
 
 function closeLeadReminders() {
   document.getElementById('leadReminderModalOverlay').classList.add('hidden');
+}
+
+let winbackFilter = 'active';
+
+function parseWinbackInput(text) {
+  return String(text || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => !/^name\s*,?\s*phone$/i.test(line))
+    .map(line => {
+      const [name, phone] = line.split(',').map(s => (s || '').trim());
+      return { name, phone: phone || null };
+    })
+    .filter(row => row.name);
+}
+
+async function addWinbackTargets() {
+  const errEl = document.getElementById('winbackAddError');
+  const noticeEl = document.getElementById('winbackAddNotice');
+  errEl.textContent = '';
+  noticeEl.classList.add('hidden');
+
+  const fileInput = document.getElementById('winbackFileInput');
+  const pasteText = document.getElementById('winbackPasteInput').value;
+  let text = pasteText;
+  if (fileInput.files && fileInput.files[0]) {
+    text = await fileInput.files[0].text();
+  }
+
+  const rows = parseWinbackInput(text);
+  if (!rows.length) {
+    errEl.textContent = 'Add at least one name (upload a file or paste a list).';
+    return;
+  }
+
+  const { error } = await supabase.from('winback_leads').insert(
+    rows.map(r => ({ name: r.name, phone: r.phone, created_by: profile.id }))
+  );
+  if (error) { errEl.textContent = error.message; return; }
+
+  fileInput.value = '';
+  document.getElementById('winbackPasteInput').value = '';
+  noticeEl.textContent = `Added ${rows.length} to the winback pool.`;
+  noticeEl.classList.remove('hidden');
+  await loadWinback();
+}
+
+async function fetchWinbackNotesById() {
+  const { data, error } = await supabase
+    .from('winback_notes')
+    .select('id, winback_id, staff_id, body, created_at, profiles(name)')
+    .order('created_at', { ascending: true });
+  const byId = {};
+  (error ? [] : data).forEach(n => { (byId[n.winback_id] = byId[n.winback_id] || []).push(n); });
+  return byId;
+}
+
+async function loadWinback() {
+  const [{ data: leadsData }, notesById, { data: staffData }] = await Promise.all([
+    supabase.from('winback_leads').select('*').order('created_at', { ascending: false }),
+    fetchWinbackNotesById(),
+    window.__mgmtStaffCache ? Promise.resolve({ data: window.__mgmtStaffCache }) : supabase.from('profiles').select('id, name'),
+  ]);
+  window.__winbackLeadsCache = leadsData || [];
+  window.__winbackNotesCache = notesById;
+  window.__winbackStaffCache = staffData || [];
+  document.getElementById('winbackUploadSection').classList.toggle('hidden', !isManagerLike());
+  renderWinbackList();
+  renderWinbackSummary();
+}
+
+function winbackStatusBadge(status) {
+  if (status === 'won') return '<span class="badge done">won</span>';
+  if (status === 'lost') return '<span class="badge lost">lost</span>';
+  if (status === 'contacted') return '<span class="badge pending">contacted</span>';
+  return '<span class="badge">open</span>';
+}
+
+function renderWinbackCard(w, notes) {
+  const noteRows = (notes || []).map(n => `
+    <div class="lead-note-entry">
+      <div class="lead-note-meta">${escapeHtml(fmtTime(n.created_at))}${n.profiles?.name ? ' · ' + escapeHtml(n.profiles.name) : ''}</div>
+      <div class="lead-note-body">${escapeHtml(n.body)}</div>
+    </div>
+  `).join('');
+  const wonLine = w.status === 'won'
+    ? `<div class="lead-card-notes">Won by ${escapeHtml(winbackStaffName(w.won_by))}${canSeeRevenue() && w.revenue != null ? ` — ${fmtMoney(w.revenue)}` : ''}</div>`
+    : '';
+  const actions = (w.status === 'won' || w.status === 'lost')
+    ? (isManagerLike() ? `<button class="ghost" onclick="reopenWinback('${w.id}')">reopen</button> <button class="ghost" onclick="removeWinbackLead('${w.id}')">delete</button>` : '')
+    : `<button class="ghost" onclick="openWinbackWinField('${w.id}')">mark won</button>
+       <button class="ghost" onclick="markWinbackLost('${w.id}')">mark lost</button>
+       ${isManagerLike() ? `<button class="ghost" onclick="removeWinbackLead('${w.id}')">delete</button>` : ''}`;
+
+  return `<div class="lead-card">
+    <div class="lead-card-head">
+      <span class="lead-card-name">${escapeHtml(w.name)}</span>
+      ${winbackStatusBadge(w.status)}
+    </div>
+    ${w.phone ? `<a class="winback-phone" href="tel:${escapeAttr(w.phone)}">${escapeHtml(w.phone)}</a>` : ''}
+    ${wonLine}
+    <div class="lead-notes-list">${noteRows}</div>
+    <div class="inline-row" style="margin-top:8px;">
+      <input type="text" id="winbackNoteInput-${w.id}" placeholder="Log a call..." onkeydown="if(event.key==='Enter'){addWinbackNote('${w.id}')}">
+      <button class="ghost" onclick="addWinbackNote('${w.id}')">add note</button>
+    </div>
+    <div class="inline-row hidden" id="winbackWinField-${w.id}" style="margin-top:8px;">
+      <input type="number" min="0" step="0.01" id="winbackRevenueInput-${w.id}" placeholder="Sale amount ($)">
+      <button class="primary" style="width:auto;" onclick="confirmWinbackWon('${w.id}')">Confirm win</button>
+      <button class="link" onclick="document.getElementById('winbackWinField-${w.id}').classList.add('hidden')">Cancel</button>
+    </div>
+    <div class="lead-card-meta">
+      <span>${fmtDate((w.created_at || '').slice(0, 10))}</span>
+      <span>${actions}</span>
+    </div>
+  </div>`;
+}
+
+function winbackStaffName(id) {
+  const s = (window.__mgmtStaffCache || window.__winbackStaffCache || []).find(x => x.id === id);
+  return s ? s.name : 'someone';
+}
+
+function renderWinbackList() {
+  const all = window.__winbackLeadsCache || [];
+  const notesById = window.__winbackNotesCache || {};
+  const filtered = all.filter(w => {
+    if (winbackFilter === 'active') return w.status === 'open' || w.status === 'contacted';
+    if (winbackFilter === 'all') return true;
+    return w.status === winbackFilter;
+  });
+  const listEl = document.getElementById('winbackList');
+  const emptyEl = document.getElementById('winbackEmpty');
+  if (!filtered.length) {
+    listEl.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+  } else {
+    emptyEl.classList.add('hidden');
+    listEl.innerHTML = filtered.map(w => renderWinbackCard(w, notesById[w.id])).join('');
+  }
+}
+
+function renderWinbackSummary() {
+  const all = window.__winbackLeadsCache || [];
+  document.getElementById('winbackSummaryRevenueHeader').classList.toggle('hidden', !canSeeRevenue());
+  const won = all.filter(w => w.status === 'won' && w.won_by);
+  const byStaff = {};
+  won.forEach(w => {
+    const b = (byStaff[w.won_by] = byStaff[w.won_by] || { count: 0, revenue: 0 });
+    b.count += 1;
+    b.revenue += Number(w.revenue) || 0;
+  });
+  const rows = Object.entries(byStaff)
+    .map(([id, b]) => ({ name: winbackStaffName(id), ...b }))
+    .sort((a, b) => b.revenue - a.revenue || b.count - a.count);
+  const tbody = document.getElementById('winbackSummaryTbody');
+  const emptyEl = document.getElementById('winbackSummaryEmpty');
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>${escapeHtml(r.name)}</td>
+    <td class="num">${r.count}</td>
+    ${canSeeRevenue() ? `<td class="num">${fmtMoney(r.revenue)}</td>` : ''}
+  </tr>`).join('');
+}
+
+async function addWinbackNote(id) {
+  const input = document.getElementById('winbackNoteInput-' + id);
+  const body = input.value.trim();
+  if (!body) return;
+  const { error } = await supabase.from('winback_notes').insert({ winback_id: id, staff_id: profile.id, body });
+  if (error) { alert(error.message); return; }
+  const lead = (window.__winbackLeadsCache || []).find(w => w.id === id);
+  if (lead && lead.status === 'open') {
+    await supabase.from('winback_leads').update({ status: 'contacted' }).eq('id', id);
+  }
+  await loadWinback();
+}
+
+function openWinbackWinField(id) {
+  document.getElementById('winbackWinField-' + id).classList.remove('hidden');
+}
+
+async function confirmWinbackWon(id) {
+  const revenueInput = document.getElementById('winbackRevenueInput-' + id);
+  const revenue = revenueInput.value === '' ? null : Number(revenueInput.value);
+  if (revenue == null || Number.isNaN(revenue) || revenue < 0) {
+    alert('Enter a valid sale amount.');
+    return;
+  }
+  const { error } = await supabase.from('winback_leads')
+    .update({ status: 'won', won_by: profile.id, won_at: new Date().toISOString(), revenue })
+    .eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadWinback();
+}
+
+async function markWinbackLost(id) {
+  if (!confirm('Mark this winback target as lost?')) return;
+  const { error } = await supabase.from('winback_leads').update({ status: 'lost' }).eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadWinback();
+}
+
+async function reopenWinback(id) {
+  const { error } = await supabase.from('winback_leads')
+    .update({ status: 'open', won_by: null, won_at: null, revenue: null })
+    .eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadWinback();
+}
+
+async function removeWinbackLead(id) {
+  if (!confirm('Remove this winback target? This cannot be undone.')) return;
+  const { error } = await supabase.from('winback_leads').delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadWinback();
 }
 
 function isoMonthKey(d) { return d.toISOString().slice(0, 7); }
@@ -2966,6 +3242,7 @@ Object.assign(window, {
   openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
   selectDmContact, saveLeadReminder, snoozeLeadReminder, openNameModal, printWallOfFame,
   openAvatarModal, pickAvatarColor, pickAvatarEmoji,
+  addWinbackNote, openWinbackWinField, confirmWinbackWon, markWinbackLost, reopenWinback, removeWinbackLead,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -2974,6 +3251,11 @@ document.getElementById('setupBtn').addEventListener('click', createFirstManager
 document.getElementById('staffAddEntryBtn').addEventListener('click', addStaffEntry);
 document.getElementById('mgmtAddStaffBtn').addEventListener('click', addStaffMgmt);
 document.getElementById('leadAddBtn').addEventListener('click', addLead);
+document.getElementById('winbackAddBtn').addEventListener('click', addWinbackTargets);
+document.getElementById('winbackStatusFilter').addEventListener('change', e => {
+  winbackFilter = e.target.value;
+  renderWinbackList();
+});
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('nameSaveBtn').addEventListener('click', saveName);

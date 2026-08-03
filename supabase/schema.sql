@@ -79,6 +79,36 @@ create table public.schedule (
   unique (staff_id, date)
 );
 
+-- winback_leads: former/lapsed members a manager uploads for the whole
+-- team to work as a shared pool (not staff-owned like `leads`). Phone is
+-- stored here specifically because these are existing past customers the
+-- business already has on file elsewhere, unlike the no-PII stance taken
+-- for regular leads. Revenue on a win is tracked here rather than as a
+-- normal `entries` row, so winback commission stays a separate tally
+-- instead of mixing into the daily conversion numbers/leaderboard.
+create table public.winback_leads (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text,
+  status text not null default 'open' check (status in ('open', 'contacted', 'won', 'lost')),
+  won_by uuid references public.profiles(id) on delete set null,
+  won_at timestamptz,
+  revenue numeric(10, 2) check (revenue >= 0),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+-- winback_notes: shared call log, visible to everyone (not just the
+-- author) so staff can see who already called and what happened before
+-- trying again.
+create table public.winback_notes (
+  id uuid primary key default gen_random_uuid(),
+  winback_id uuid not null references public.winback_leads(id) on delete cascade,
+  staff_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null check (char_length(btrim(body)) > 0 and char_length(body) <= 2000),
+  created_at timestamptz not null default now()
+);
+
 -- entry_audit_log: a record of manager edits/deletes on entries, for
 -- accountability if a number is later disputed. Deliberately has no
 -- foreign key to entries(id) — a delete's whole point is that the
@@ -187,6 +217,8 @@ alter table public.lead_notes enable row level security;
 alter table public.direct_messages enable row level security;
 alter table public.schedule enable row level security;
 alter table public.entry_audit_log enable row level security;
+alter table public.winback_leads enable row level security;
+alter table public.winback_notes enable row level security;
 
 -- profiles: readable by any signed-in user (names/roles aren't sensitive);
 -- writable only by the row owner (name) or a manager (name + role); no
@@ -367,6 +399,43 @@ create policy "entry_audit_log insertable by manager"
   on public.entry_audit_log for insert
   to authenticated
   with check (public.can_manage() and changed_by = auth.uid());
+
+-- winback_leads: a shared pool, not staff-owned. Any signed-in user can
+-- read and work a lead (call, log notes, update status/win); only a
+-- manager/supervisor can add new targets (the file upload) or delete one
+-- outright.
+create policy "winback_leads readable by authenticated"
+  on public.winback_leads for select
+  to authenticated
+  using (true);
+
+create policy "winback_leads insertable by manager"
+  on public.winback_leads for insert
+  to authenticated
+  with check (public.can_manage());
+
+create policy "winback_leads updatable by authenticated"
+  on public.winback_leads for update
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "winback_leads deletable by manager"
+  on public.winback_leads for delete
+  to authenticated
+  using (public.can_manage());
+
+-- winback_notes: append-only shared call log, same spirit as messages —
+-- everyone can read and add, nobody edits or deletes history.
+create policy "winback_notes readable by authenticated"
+  on public.winback_notes for select
+  to authenticated
+  using (true);
+
+create policy "winback_notes insertable by authenticated"
+  on public.winback_notes for insert
+  to authenticated
+  with check (staff_id = auth.uid());
 
 -- ---------------------------------------------------------------------------
 -- Leaderboard: per-staff, per-month totals for everyone, visible to any
