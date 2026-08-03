@@ -47,8 +47,28 @@ this key secret.
    - `SUPABASE_URL` — same Project URL as above
    - `SUPABASE_SERVICE_ROLE_KEY` — the service_role key (**never** put this
      in `config.js` or anywhere else that ships to the browser — it's only
-     read server-side by the two functions in `netlify/functions/`)
+     read server-side by the functions in `netlify/functions/`)
+   - `SENDGRID_API_KEY` — from [SendGrid](https://sendgrid.com) → Settings →
+     API Keys (needed for the daily email report, see below)
+   - `SENDGRID_FROM_EMAIL` — the address the report is sent *from*. It must
+     be a verified sender in SendGrid (Settings → Sender Authentication —
+     either verify a single address or authenticate your whole domain)
+   - `REPORT_TO_EMAIL` — optional, defaults to `manager@mysaunahouse.com`
+     if unset; set this if the report should go somewhere else
 4. Deploy.
+5. Enable the scheduled daily report by adding this block to the end of
+   `netlify.toml` (not added automatically — see `netlify/functions/daily-report.js`
+   for what it sends and when):
+   ```toml
+   [functions."daily-report"]
+     schedule = "0 * * * *"
+   ```
+   It runs hourly and only actually sends once it's 8pm in
+   `America/New_York` (edit `REPORT_TIMEZONE`/`REPORT_HOUR` at the top of
+   the function file to change that), so the send time stays correct
+   across DST without needing to guess a fixed UTC cron time. It reports
+   that day's visits/sold/revenue per staff member, plus anyone scheduled
+   that day (via **Schedule**) who never logged a tracker entry.
 
 ## 4. Bootstrap the first manager account
 
@@ -81,9 +101,13 @@ login and all their logged entries. This can't be undone.
   (daily visits/sold per staff member), `settings` (the target %), plus the
   RLS policies and the trigger that turns the very first signed-up user
   into a manager.
-- `netlify/functions/create-staff.js`, `delete-staff.js` — the only two
-  places the private `service_role` key is used. Both check the caller is
-  a signed-in manager before doing anything.
+- `netlify/functions/create-staff.js`, `delete-staff.js` — use the private
+  `service_role` key to manage staff logins. Both check the caller is a
+  signed-in manager before doing anything.
+- `netlify/functions/daily-report.js` — scheduled function (see setup step
+  5 above) that emails the manager a daily sold/revenue/missed-tracker
+  summary via SendGrid. Also uses the `service_role` key, but has no
+  caller to check since it's only ever invoked by Netlify's scheduler.
 
 ## Local preview
 

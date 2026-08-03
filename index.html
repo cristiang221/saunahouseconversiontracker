@@ -145,9 +145,17 @@
   .account-row span { font-size: 12.5px; color: var(--text-faint); }
   .badge { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--sage); border: 1px solid var(--sage); border-radius: 999px; padding: 2px 8px; }
 
-  .avatar { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; color: rgba(0,0,0,0.72); flex: none; vertical-align: middle; }
-  .avatar.lg { width: 32px; height: 32px; font-size: 12px; }
+  .avatar { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; color: rgba(0,0,0,0.72); flex: none; vertical-align: middle; }
+  .avatar.lg { width: 44px; height: 44px; font-size: 19px; }
   .name-with-avatar { display: inline-flex; align-items: center; gap: 8px; }
+
+  .avatar-preview-row { display: flex; justify-content: center; margin-bottom: 18px; }
+  .avatar-color-grid, .avatar-emoji-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .avatar-swatch { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; padding: 0; }
+  .avatar-swatch.selected { border-color: var(--text); }
+  .avatar-emoji-btn { width: 32px; height: 32px; border-radius: 8px; background: var(--panel-raised); border: 1px solid var(--line); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; color: var(--text); font-family: 'JetBrains Mono', monospace; }
+  .avatar-emoji-btn:hover { border-color: var(--ember); }
+  .avatar-emoji-btn.selected { border-color: var(--ember); background: var(--ember-dim); }
 
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 14px; margin-bottom: 28px; }
   .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
@@ -358,6 +366,8 @@
   }
   .sidebar-footer .account-email { font-size: 11px; color: var(--text-faint); word-break: break-all; padding: 0 8px; }
   .sidebar-footer button { width: 100%; }
+  .sidebar-account-row { display: flex; align-items: center; gap: 8px; padding: 0 0 2px; }
+  .sidebar-account-row .account-email { padding: 0; }
 
   .app-main { flex: 1; min-width: 0; padding: 32px 40px 60px; }
   .app-topbar { margin-bottom: 24px; }
@@ -556,6 +566,26 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="avatarModalOverlay">
+  <div class="panel">
+    <h2 style="margin-bottom:14px;">Customize your avatar</h2>
+    <div class="avatar-preview-row">
+      <span class="avatar lg" id="avatarPreview"></span>
+    </div>
+    <div class="field">
+      <label>Color</label>
+      <div class="avatar-color-grid" id="avatarColorGrid"></div>
+    </div>
+    <div class="field">
+      <label>Icon (optional — leave on initials if you'd rather)</label>
+      <div class="avatar-emoji-grid" id="avatarEmojiGrid"></div>
+    </div>
+    <button class="primary" id="avatarSaveBtn">Save avatar</button>
+    <button class="link" style="margin-top:12px;" id="avatarCancelBtn">Cancel</button>
+    <p class="error" id="avatarError"></p>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="nameModalOverlay">
   <div class="panel">
     <h2 style="margin-bottom:14px;">Change display name</h2>
@@ -642,7 +672,11 @@
       </div>
       <div class="sidebar-nav" id="sidebarNav"></div>
       <div class="sidebar-footer">
-        <div class="account-email" id="sidebarAccountEmail"></div>
+        <div class="sidebar-account-row">
+          <span class="avatar" id="sidebarAvatarPreview"></span>
+          <div class="account-email" id="sidebarAccountEmail"></div>
+        </div>
+        <button class="link" onclick="openAvatarModal()">Edit avatar</button>
         <button class="link" onclick="openNameModal()">Change name</button>
         <button class="link" onclick="openPwModal()">Change password</button>
         <button onclick="signOut()">Log out</button>
@@ -1237,6 +1271,9 @@ function isManagerLike() { return !!profile && (profile.role === 'manager' || pr
 function isManager() { return !!profile && profile.role === 'manager'; }
 function canSeeRevenue() { return isManager(); }
 
+const AVATAR_COLORS = ['#E07A3F', '#C1553F', '#E0B85F', '#7FA593', '#6E90B0', '#8F7FE0', '#C79ECF', '#5FBFA0'];
+const AVATAR_EMOJIS = ['🔥', '💧', '🌿', '☀️', '⭐', '🏆', '🎯', '💪', '😎', '🦦', '🐢', '🦥', '🐬', '🌊', '🧊', '🍃', '🌙', '⚡', '🌵', '🐝', '🦋', '🍄', '🌸', '🎧'];
+
 function staffHue(id) {
   const str = String(id || '');
   let hash = 0;
@@ -1248,12 +1285,19 @@ function staffInitials(name) {
   if (!parts.length) return '?';
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
-function staffAvatarHtml(id, name, size) {
-  const hue = staffHue(id);
-  return `<span class="avatar${size === 'lg' ? ' lg' : ''}" style="background:hsl(${hue},58%,62%);" title="${escapeAttr(name || '')}">${escapeHtml(staffInitials(name))}</span>`;
+function staffAvatarColor(staff) {
+  return (staff && staff.avatar_color) || `hsl(${staffHue(staff && staff.id)},58%,62%)`;
 }
-function nameWithAvatarHtml(id, name, size) {
-  return `<span class="name-with-avatar">${staffAvatarHtml(id, name, size)}<span>${escapeHtml(name || '')}</span></span>`;
+function staffAvatarContent(staff) {
+  return (staff && staff.avatar_emoji) ? escapeHtml(staff.avatar_emoji) : escapeHtml(staffInitials(staff && staff.name));
+}
+function staffAvatarHtml(staff, size) {
+  const name = (staff && staff.name) || '';
+  return `<span class="avatar${size === 'lg' ? ' lg' : ''}" style="background:${staffAvatarColor(staff)};" title="${escapeAttr(name)}">${staffAvatarContent(staff)}</span>`;
+}
+function nameWithAvatarHtml(staff, size) {
+  const name = (staff && staff.name) || '';
+  return `<span class="name-with-avatar">${staffAvatarHtml(staff, size)}<span>${escapeHtml(name)}</span></span>`;
 }
 
 function hideAll() {
@@ -1394,6 +1438,55 @@ async function savePassword() {
   closePwModal();
 }
 
+let avatarPickState = { emoji: null, color: null };
+
+function updateSidebarAvatarPreview() {
+  const el = document.getElementById('sidebarAvatarPreview');
+  if (!el || !profile) return;
+  el.style.background = staffAvatarColor(profile);
+  el.textContent = profile.avatar_emoji || staffInitials(profile.name);
+  el.title = profile.name || '';
+}
+
+function renderAvatarPicker() {
+  const previewEl = document.getElementById('avatarPreview');
+  previewEl.style.background = avatarPickState.color || `hsl(${staffHue(profile.id)},58%,62%)`;
+  previewEl.textContent = avatarPickState.emoji || staffInitials(profile.name);
+
+  document.getElementById('avatarColorGrid').innerHTML =
+    `<button type="button" class="avatar-swatch ${!avatarPickState.color ? 'selected' : ''}" style="background:hsl(${staffHue(profile.id)},58%,62%);" title="Default" onclick="pickAvatarColor(null)"></button>` +
+    AVATAR_COLORS.map(c => `<button type="button" class="avatar-swatch ${avatarPickState.color === c ? 'selected' : ''}" style="background:${c};" onclick="pickAvatarColor('${c}')"></button>`).join('');
+
+  document.getElementById('avatarEmojiGrid').innerHTML =
+    `<button type="button" class="avatar-emoji-btn ${!avatarPickState.emoji ? 'selected' : ''}" onclick="pickAvatarEmoji(null)" title="Initials">${escapeHtml(staffInitials(profile.name))}</button>` +
+    AVATAR_EMOJIS.map(e => `<button type="button" class="avatar-emoji-btn ${avatarPickState.emoji === e ? 'selected' : ''}" onclick="pickAvatarEmoji('${e}')">${e}</button>`).join('');
+}
+
+function pickAvatarColor(c) { avatarPickState.color = c; renderAvatarPicker(); }
+function pickAvatarEmoji(e) { avatarPickState.emoji = e; renderAvatarPicker(); }
+
+function openAvatarModal() {
+  avatarPickState = { emoji: profile.avatar_emoji || null, color: profile.avatar_color || null };
+  document.getElementById('avatarError').textContent = '';
+  renderAvatarPicker();
+  document.getElementById('avatarModalOverlay').classList.remove('hidden');
+}
+function closeAvatarModal() { document.getElementById('avatarModalOverlay').classList.add('hidden'); }
+
+async function saveAvatar() {
+  const errEl = document.getElementById('avatarError');
+  const { error } = await supabase.from('profiles')
+    .update({ avatar_emoji: avatarPickState.emoji, avatar_color: avatarPickState.color })
+    .eq('id', profile.id);
+  if (error) { errEl.textContent = error.message; return; }
+  profile.avatar_emoji = avatarPickState.emoji;
+  profile.avatar_color = avatarPickState.color;
+  closeAvatarModal();
+  updateSidebarAvatarPreview();
+  await loadLeaderboard();
+  await (isManagerLike() ? renderMgmtHome() : renderStaffHome());
+}
+
 function openNameModal() {
   document.getElementById('nameInput').value = profile ? profile.name : '';
   document.getElementById('nameError').textContent = '';
@@ -1432,6 +1525,7 @@ async function route() {
   if (profileErr || !p) { await supabase.auth.signOut(); return; }
   profile = p;
   document.getElementById('sidebarAccountEmail').textContent = session.user.email;
+  updateSidebarAvatarPreview();
 
   const { data: settingsRow } = await supabase.from('settings').select('target, note').eq('id', 1).single();
   target = settingsRow ? settingsRow.target : 20;
@@ -1461,7 +1555,7 @@ function monthLabel(key) {
 
 async function loadLeaderboard() {
   const [{ data: profilesData }, { data: lbRows, error }] = await Promise.all([
-    supabase.from('profiles').select('id, name').order('name'),
+    supabase.from('profiles').select('id, name, avatar_emoji, avatar_color').order('name'),
     supabase.rpc('monthly_leaderboard'),
   ]);
   leaderboardProfiles = profilesData || [];
@@ -1488,6 +1582,8 @@ function renderLeaderboardTable() {
       return {
         staff_id: p.id,
         name: p.name,
+        avatar_emoji: p.avatar_emoji,
+        avatar_color: p.avatar_color,
         visits: r ? Number(r.visits) : 0,
         sold: r ? Number(r.sold) : 0,
         rate: r ? Number(r.rate) : 0,
@@ -1509,7 +1605,7 @@ function renderLeaderboardTable() {
     const isMe = profile && r.staff_id === profile.id;
     return `<tr${isMe ? ' style="background:var(--panel-raised);"' : ''}>
       <td class="num">${i + 1}${i === 0 && r.sold > 0 ? ' <span class="flame-bounce">🔥</span>' : ''}</td>
-      <td>${nameWithAvatarHtml(r.staff_id, r.name)}${isMe ? ' <span class="badge">you</span>' : ''}</td>
+      <td>${nameWithAvatarHtml({ id: r.staff_id, name: r.name, avatar_emoji: r.avatar_emoji, avatar_color: r.avatar_color })}${isMe ? ' <span class="badge">you</span>' : ''}</td>
       <td class="num">${r.visits}</td>
       <td class="num">${r.sold}</td>
       <td class="rate-cell ${hit ? 'hit' : 'miss'}">${r.rate.toFixed(1)}%</td>
@@ -1523,7 +1619,7 @@ function printWallOfFame() {
   const combined = leaderboardProfiles
     .map(p => {
       const r = byStaff[p.id];
-      return { staff_id: p.id, name: p.name, visits: r ? Number(r.visits) : 0, sold: r ? Number(r.sold) : 0, rate: r ? Number(r.rate) : 0 };
+      return { staff_id: p.id, name: p.name, avatar_emoji: p.avatar_emoji, avatar_color: p.avatar_color, visits: r ? Number(r.visits) : 0, sold: r ? Number(r.sold) : 0, rate: r ? Number(r.rate) : 0 };
     })
     .sort((a, b) => b.sold - a.sold || b.rate - a.rate);
   const top = combined[0];
@@ -1536,8 +1632,8 @@ function printWallOfFame() {
 
   document.getElementById('posterMonth').textContent = monthLabel(leaderboardMonth);
   const avatarEl = document.getElementById('posterAvatar');
-  avatarEl.textContent = staffInitials(top.name);
-  avatarEl.style.background = `hsl(${staffHue(top.staff_id)},58%,62%)`;
+  avatarEl.textContent = top.avatar_emoji || staffInitials(top.name);
+  avatarEl.style.background = staffAvatarColor({ id: top.staff_id, avatar_color: top.avatar_color });
   document.getElementById('posterName').textContent = top.name;
   document.getElementById('posterStats').innerHTML = `
     <div><div class="poster-stat-value">${top.sold}</div><div class="poster-stat-label">Members sold</div></div>
@@ -1632,7 +1728,7 @@ async function loadDMs() {
     contactsPanel.classList.remove('hidden');
     const staffList = (window.__mgmtStaffCache || []).filter(s => s.role === 'staff');
     document.getElementById('dmContactsList').innerHTML = staffList.map(s => `
-      <button class="ghost dm-contact ${s.id === dmRecipientId ? 'active' : ''}" onclick="selectDmContact('${s.id}')">${nameWithAvatarHtml(s.id, s.name)}</button>
+      <button class="ghost dm-contact ${s.id === dmRecipientId ? 'active' : ''}" onclick="selectDmContact('${s.id}')">${nameWithAvatarHtml(s)}</button>
     `).join('') || '<div class="empty">No staff yet.</div>';
     if (!dmRecipientId && staffList.length) {
       dmRecipientId = staffList[0].id;
@@ -2161,7 +2257,7 @@ function renderEntriesTable() {
       const hit = rate >= target;
       return `<tr>
         <td>${fmtDate(e.date)}</td>
-        <td>${s ? nameWithAvatarHtml(s.id, s.name) : escapeHtml('Removed staff')}</td>
+        <td>${s ? nameWithAvatarHtml(s) : escapeHtml('Removed staff')}</td>
         <td class="num">${e.visits}</td>
         <td class="num">${e.sold}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
@@ -2193,7 +2289,7 @@ function renderSalesTable() {
       const s = staffById[e.staff_id];
       return `<tr>
         <td>${fmtDate(e.date)}</td>
-        <td>${s ? nameWithAvatarHtml(s.id, s.name) : escapeHtml('Removed staff')}</td>
+        <td>${s ? nameWithAvatarHtml(s) : escapeHtml('Removed staff')}</td>
         <td>${escapeHtml(e.member_name || '—')}</td>
         <td class="num">${e.sold}</td>
         <td class="num">${e.revenue != null ? fmtMoney(e.revenue) : '—'}</td>
@@ -2562,7 +2658,7 @@ async function renderMgmtHome() {
       const rate = visits > 0 ? (sold / visits) * 100 : 0;
       const hit = rate >= target;
       return `<tr>
-        <td>${nameWithAvatarHtml(s.id, s.name)}</td>
+        <td>${nameWithAvatarHtml(s)}</td>
         <td class="num">${visits}</td>
         <td class="num">${sold}</td>
         ${canSeeRevenue() ? `<td class="num">${fmtMoney(revenue)}</td>` : ''}
@@ -2575,7 +2671,7 @@ async function renderMgmtHome() {
 
   document.getElementById('mgmtStaffList').innerHTML = staff.map(s => `
     <div class="staff-row">
-      <span style="font-size:13.5px;display:flex;align-items:center;gap:8px;">${staffAvatarHtml(s.id, s.name)}${escapeHtml(s.name)} <span style="color:var(--text-faint);">${escapeHtml(s.email)}</span> ${s.role === 'manager' ? '<span class="badge">manager</span>' : ''}${s.role === 'supervisor' ? '<span class="badge">supervisor</span>' : ''}</span>
+      <span style="font-size:13.5px;display:flex;align-items:center;gap:8px;">${staffAvatarHtml(s)}${escapeHtml(s.name)} <span style="color:var(--text-faint);">${escapeHtml(s.email)}</span> ${s.role === 'manager' ? '<span class="badge">manager</span>' : ''}${s.role === 'supervisor' ? '<span class="badge">supervisor</span>' : ''}</span>
       <span style="display:flex;align-items:center;gap:10px;">
         ${s.id === profile.id ? '' : `
           <select class="role-select" style="width:auto;font-size:12px;padding:4px 8px;" onchange="updateStaffRole('${s.id}', this.value)">
@@ -2632,7 +2728,7 @@ async function renderMgmtHome() {
     leadsEmptyEl.classList.add('hidden');
     leadsGroupsEl.innerHTML = staffWithLeads.map(s => `
       <div class="lead-group">
-        <p class="stat-label lead-group-heading">${nameWithAvatarHtml(s.id, s.name)}</p>
+        <p class="stat-label lead-group-heading">${nameWithAvatarHtml(s)}</p>
         ${leadsByStaff[s.id].map(l => renderLeadCard(l, notesByLead[l.id])).join('')}
       </div>
     `).join('');
@@ -2869,6 +2965,7 @@ Object.assign(window, {
   removeStaffEntry, removeStaffMgmt, removeMgmtEntry, exportCsv, updateStaffRole,
   openEditEntryModal, toggleLeadFollowedUp, removeLead, showPage, updateLeadStage, addLeadNote,
   selectDmContact, saveLeadReminder, snoozeLeadReminder, openNameModal, printWallOfFame,
+  openAvatarModal, pickAvatarColor, pickAvatarEmoji,
 });
 
 document.getElementById('signInBtn').addEventListener('click', signIn);
@@ -2881,6 +2978,8 @@ document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('nameSaveBtn').addEventListener('click', saveName);
 document.getElementById('nameCancelBtn').addEventListener('click', closeNameModal);
+document.getElementById('avatarSaveBtn').addEventListener('click', saveAvatar);
+document.getElementById('avatarCancelBtn').addEventListener('click', closeAvatarModal);
 document.getElementById('dailyRecapCloseBtn').addEventListener('click', closeDailyRecap);
 document.getElementById('leadReminderCloseBtn').addEventListener('click', closeLeadReminders);
 document.getElementById('scheduleUploadBtn').addEventListener('click', uploadSchedule);

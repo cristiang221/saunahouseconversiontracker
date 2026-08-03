@@ -12,6 +12,8 @@ create table public.profiles (
   name text not null,
   email text not null,
   role text not null default 'staff' check (role in ('staff', 'manager', 'supervisor')),
+  avatar_emoji text,
+  avatar_color text,
   created_at timestamptz not null default now()
 );
 
