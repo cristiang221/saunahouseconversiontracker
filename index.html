@@ -97,6 +97,19 @@
     padding: 22px 24px;
   }
   .field { margin-bottom: 14px; }
+  .dropzone {
+    border: 1.5px dashed var(--line);
+    border-radius: 10px;
+    padding: 22px 16px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+  .dropzone i { display: block; font-size: 20px; margin-bottom: 6px; }
+  .dropzone:hover { border-color: var(--sage); color: var(--text-dim); }
+  .dropzone.drag-over { border-color: var(--ember); background: rgba(224,122,63,0.08); color: var(--text); }
   .field label {
     display: block;
     font-family: 'JetBrains Mono', monospace;
@@ -1135,7 +1148,11 @@
               <p class="sub" style="margin-bottom:12px;">Upload a CSV/text file or paste a list of former members to bring back — one per line, <code>Name, Phone</code> (phone optional).</p>
               <div class="field">
                 <label>Upload a file</label>
-                <input type="file" id="winbackFileInput" accept=".csv,.txt">
+                <div class="dropzone" id="winbackDropzone">
+                  <i class="ti ti-upload"></i>
+                  <span id="winbackDropzoneText">Drag a file here, or click to browse</span>
+                  <input type="file" id="winbackFileInput" accept=".csv,.txt" style="display:none;">
+                </div>
               </div>
               <div class="field">
                 <label>...or paste names directly</label>
@@ -2058,6 +2075,7 @@ async function addWinbackTargets() {
   if (error) { errEl.textContent = error.message; return; }
 
   fileInput.value = '';
+  document.getElementById('winbackDropzoneText').textContent = 'Drag a file here, or click to browse';
   document.getElementById('winbackPasteInput').value = '';
   noticeEl.textContent = `Added ${rows.length} to the winback pool.`;
   noticeEl.classList.remove('hidden');
@@ -3256,6 +3274,42 @@ document.getElementById('winbackStatusFilter').addEventListener('change', e => {
   winbackFilter = e.target.value;
   renderWinbackList();
 });
+
+// Without this, dropping a file anywhere on the page outside the exact
+// dropzone target falls through to the browser's default behavior, which
+// is typically navigating the tab away to display the raw file.
+['dragover', 'drop'].forEach(evt => {
+  window.addEventListener(evt, e => e.preventDefault());
+});
+
+(() => {
+  const dropzone = document.getElementById('winbackDropzone');
+  const fileInput = document.getElementById('winbackFileInput');
+  const textEl = document.getElementById('winbackDropzoneText');
+  const defaultText = textEl.textContent;
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+  });
+  ['dragleave', 'dragend'].forEach(evt => {
+    dropzone.addEventListener(evt, () => dropzone.classList.remove('drag-over'));
+  });
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      fileInput.files = e.dataTransfer.files;
+      textEl.textContent = e.dataTransfer.files[0].name;
+    }
+  });
+  fileInput.addEventListener('change', () => {
+    textEl.textContent = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : defaultText;
+  });
+})();
 document.getElementById('pwSaveBtn').addEventListener('click', savePassword);
 document.getElementById('pwCancelBtn').addEventListener('click', closePwModal);
 document.getElementById('nameSaveBtn').addEventListener('click', saveName);
