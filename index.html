@@ -1334,6 +1334,38 @@
           </section>
         </div>
 
+        <div class="page hidden" id="page-market-intel">
+          <section>
+            <div class="section-head">
+              <h2>Competitor pricing &amp; services</h2>
+              <button class="ghost" id="marketIntelRefreshBtn" style="width:auto;"><i class="ti ti-refresh"></i> Refresh</button>
+            </div>
+            <div class="panel">
+              <p class="sub" style="margin-bottom:12px;">Automatic checks of nearby competitor pricing/services pages (SweatHouz, The Spa at The Highland, Modern Sauna Spa, Alive and Well, Urban Sweat). Only real, meaningful changes show up here — unchanged checks aren't logged.</p>
+              <div id="marketIntelCompetitorList"></div>
+              <div class="empty hidden" id="marketIntelCompetitorEmpty"><i class="ti ti-telescope empty-icon"></i><span class="empty-warm-text">No changes detected yet.</span></div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Reviews</h2></div>
+            <div class="panel">
+              <p class="sub" style="margin-bottom:12px;">Google review activity for Sauna House.</p>
+              <div id="marketIntelReviewList"></div>
+              <div class="empty hidden" id="marketIntelReviewEmpty"><i class="ti ti-star empty-icon"></i><span class="empty-warm-text">Nothing new yet.</span></div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head"><h2>Content &amp; trend research</h2></div>
+            <div class="panel">
+              <p class="sub" style="margin-bottom:12px;">Recurring wellness/sauna-industry research pulls, for blog and social content ideas.</p>
+              <div id="marketIntelContentList"></div>
+              <div class="empty hidden" id="marketIntelContentEmpty"><i class="ti ti-bulb empty-icon"></i><span class="empty-warm-text">No research delivered yet.</span></div>
+            </div>
+          </section>
+        </div>
+
         <div class="page hidden" id="page-chat">
           <section>
             <div class="panel chat-box">
@@ -1543,6 +1575,7 @@ const NAV_ITEMS = {
     { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
     { id: 'mgmt-schedule', label: 'Schedule', icon: 'ti-calendar' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
+    { id: 'market-intel', label: 'Market Intel', icon: 'ti-telescope' },
     { id: 'dms', label: 'Messages', icon: 'ti-mail' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
   ],
@@ -1555,6 +1588,7 @@ const NAV_ITEMS = {
     { id: 'mgmt-reports', label: 'Reports', icon: 'ti-report' },
     { id: 'mgmt-schedule', label: 'Schedule', icon: 'ti-calendar' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'ti-trophy' },
+    { id: 'market-intel', label: 'Market Intel', icon: 'ti-telescope' },
     { id: 'dms', label: 'Messages', icon: 'ti-mail' },
     { id: 'chat', label: 'Team chat', icon: 'ti-message-circle' },
   ],
@@ -1818,6 +1852,7 @@ async function route() {
   await loadDMs();
   subscribeDMs();
   await loadWinback();
+  if (isManagerLike()) await loadMarketIntel();
   showPage(isManagerLike() ? 'mgmt-dashboard' : 'staff-dashboard');
 }
 
@@ -2482,6 +2517,69 @@ async function removeWinbackLead(id) {
   const { error } = await supabase.from('winback_leads').delete().eq('id', id);
   if (error) { alert(error.message); return; }
   await loadWinback();
+}
+
+// ---------------------------------------------------------------------------
+// Market Intel: read-only view of market_intel_checks, populated server-side
+// by netlify/functions/firecrawl-webhook.js from Firecrawl monitors (see
+// supabase/migration_market_intel.sql). Nothing on this page ever writes to
+// the table — it's purely a feed of what the monitors found.
+// ---------------------------------------------------------------------------
+
+function marketIntelTimeAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
+
+function renderMarketIntelCard(row) {
+  const statusBadge = row.status ? `<span class="tag">${escapeHtml(row.status)}</span>` : '';
+  const summary = escapeHtml(row.summary || '(no summary — see raw data)');
+  const diff = row.diff_text
+    ? `<pre style="white-space:pre-wrap;font-size:12px;opacity:.75;margin-top:6px;">${escapeHtml(row.diff_text.slice(0, 800))}</pre>`
+    : '';
+  return `
+    <div class="lead-card">
+      <div class="lead-card-head">
+        <strong>${escapeHtml(row.label || 'Unknown source')}</strong> ${statusBadge}
+        <span class="sub" style="float:right;">${marketIntelTimeAgo(row.created_at)}</span>
+      </div>
+      <div class="lead-card-notes">${summary}</div>
+      ${diff}
+    </div>
+  `;
+}
+
+async function loadMarketIntel() {
+  const { data, error } = await supabase
+    .from('market_intel_checks')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(150);
+  if (error) { console.error('loadMarketIntel', error.message); return; }
+
+  window.__marketIntelCache = data || [];
+  renderMarketIntel();
+}
+
+function renderMarketIntel() {
+  const rows = window.__marketIntelCache || [];
+  const byCategory = { competitor: [], review: [], content: [] };
+  rows.forEach(r => { if (byCategory[r.category]) byCategory[r.category].push(r); });
+
+  [
+    ['competitor', 'marketIntelCompetitorList', 'marketIntelCompetitorEmpty'],
+    ['review', 'marketIntelReviewList', 'marketIntelReviewEmpty'],
+    ['content', 'marketIntelContentList', 'marketIntelContentEmpty'],
+  ].forEach(([cat, listId, emptyId]) => {
+    const list = byCategory[cat];
+    document.getElementById(listId).innerHTML = list.map(renderMarketIntelCard).join('');
+    document.getElementById(emptyId).classList.toggle('hidden', list.length > 0);
+  });
 }
 
 function isoMonthKey(d) { return d.toISOString().slice(0, 7); }
@@ -3537,6 +3635,7 @@ document.getElementById('winbackStatusFilter').addEventListener('change', e => {
   winbackFilter = e.target.value;
   renderWinbackList();
 });
+document.getElementById('marketIntelRefreshBtn').addEventListener('click', loadMarketIntel);
 
 // Without this, dropping a file anywhere on the page outside the exact
 // dropzone target falls through to the browser's default behavior, which
