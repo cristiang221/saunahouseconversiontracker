@@ -277,49 +277,11 @@
     .form-row { grid-template-columns: 1fr; }
   }
 
-  .brand-header {
-    text-align: center;
-    position: relative;
-    padding-top: 8px;
-  }
-  .brand-header::before {
-    content: '';
-    position: absolute;
-    top: 6px; left: 50%;
-    transform: translateX(-50%);
-    width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(224,122,63,0.24), transparent 68%);
-    filter: blur(18px);
-    pointer-events: none;
-    z-index: -1;
-  }
-  .brand-header h1 { font-size: 40px; letter-spacing: -0.018em; }
-  .loyly-wisp {
-    position: absolute;
-    top: 4px;
-    width: 22px; height: 54px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(243,237,226,0.4), transparent 72%);
-    filter: blur(5px);
-    opacity: 0;
-    animation: loyly-rise 5.5s ease-in infinite;
-    pointer-events: none;
-  }
-  .loyly-wisp.w1 { left: calc(50% - 38px); animation-delay: 0.4s; }
-  .loyly-wisp.w2 { left: calc(50% + 18px); animation-delay: 2.8s; }
-  @keyframes loyly-rise {
-    0% { transform: translateY(0) scaleX(1); opacity: 0; }
-    18% { opacity: 0.55; }
-    100% { transform: translateY(-96px) scaleX(1.7); opacity: 0; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .loyly-wisp { display: none; }
-  }
+  .brand-header { text-align: center; }
   .brand-logo {
     width: 84px; height: auto; margin-bottom: 16px;
     background: #fff; border-radius: 18px; padding: 10px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.35), 0 0 44px rgba(224,122,63,0.16);
-    position: relative;
   }
   .brand-logo.small { width: 52px; margin-bottom: 12px; padding: 8px; border-radius: 14px; }
   .brand-header .sub { max-width: 420px; margin-left: auto; margin-right: auto; }
@@ -424,7 +386,19 @@
   .badge.pending { color: var(--ember); border-color: var(--ember); background: rgba(224,122,63,0.1); }
   .badge.done { color: var(--sage); border-color: var(--sage); background: rgba(127,165,147,0.1); }
   .badge.lost { color: var(--text-faint); border-color: var(--text-faint); background: rgba(124,115,100,0.1); }
+  .badge.flag { color: var(--danger); border-color: var(--danger); background: rgba(193,85,63,0.1); }
   .winback-phone { color: var(--text-dim); font-size: 12.5px; text-decoration: none; }
+
+  .intel-card { padding: 13px 0 13px 14px; margin-left: -14px; border-bottom: 1px solid var(--line-soft); border-left: 3px solid var(--line); transition: border-color 0.2s ease, background 0.2s ease; }
+  .intel-card:last-child { border-bottom: none; }
+  .intel-card.tone-ember { border-left-color: var(--ember); background: linear-gradient(90deg, rgba(224,122,63,0.07), transparent 65%); }
+  .intel-card.tone-danger { border-left-color: var(--danger); background: linear-gradient(90deg, rgba(193,85,63,0.08), transparent 65%); }
+  .intel-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .intel-card-title { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; min-width: 0; }
+  .intel-card-title i { color: var(--text-faint); font-size: 13px; flex-shrink: 0; }
+  .intel-card-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .intel-card-summary { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0 0; }
+  .intel-diff { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.6; color: var(--text-faint); background: var(--panel-raised); border: 1px solid var(--line-soft); border-radius: 8px; padding: 10px 12px; margin-top: 8px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
   .winback-phone:hover { color: var(--sage); }
   .lead-stage-select { width: auto; padding: 4px 8px; font-size: 12px; border-radius: 6px; }
 
@@ -467,26 +441,8 @@
     box-shadow: 6px 0 28px rgba(0,0,0,0.22);
     z-index: 2;
   }
-  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 20px; position: relative; }
-  .sidebar-brand img { width: 30px; height: auto; position: relative; }
-  .sidebar-brand::before {
-    content: '';
-    position: absolute;
-    top: 4px; left: 12px;
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(224,122,63,0.5), transparent 70%);
-    filter: blur(6px);
-    animation: pilot-glow 3.6s ease-in-out infinite;
-    pointer-events: none;
-  }
-  @keyframes pilot-glow {
-    0%, 100% { opacity: 0.45; transform: scale(1); }
-    50% { opacity: 0.85; transform: scale(1.12); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .sidebar-brand::before { animation: none; opacity: 0.6; }
-  }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 20px; }
+  .sidebar-brand img { width: 30px; height: auto; }
   .sidebar-brand span { font-family: 'Fraunces', serif; font-size: 15px; font-weight: 500; }
   .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
   .nav-item {
@@ -793,8 +749,6 @@
 
 <div class="wrap narrow hidden" id="signInView">
   <header class="brand-header">
-    <span class="loyly-wisp w1" aria-hidden="true"></span>
-    <span class="loyly-wisp w2" aria-hidden="true"></span>
     <img src="data:image/webp;base64,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" alt="Sauna House logo" class="brand-logo" id="mainLogo" onclick="handleLogoClick()" style="cursor:pointer;" title="👀">
     <p class="eyebrow">Sauna house</p>
     <h1>Conversion tracker</h1>
@@ -817,8 +771,6 @@
 
 <div class="wrap narrow hidden" id="firstSetupView">
   <header class="brand-header">
-    <span class="loyly-wisp w1" aria-hidden="true"></span>
-    <span class="loyly-wisp w2" aria-hidden="true"></span>
     <img src="data:image/webp;base64,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" alt="Sauna House logo" class="brand-logo">
     <p class="eyebrow">First-time setup</p>
     <h1>Create the management account</h1>
@@ -2596,19 +2548,30 @@ function marketIntelTimeAgo(iso) {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+const MARKET_INTEL_ICONS = { competitor: 'ti-telescope', review: 'ti-star', content: 'ti-bulb' };
+
+function marketIntelToneAndBadge(status) {
+  const s = (status || '').toLowerCase();
+  if (s === 'new' || s === 'changed') return { tone: 'tone-ember', badge: 'pending' };
+  if (s === 'removed' || s === 'error') return { tone: 'tone-danger', badge: 'flag' };
+  return { tone: '', badge: 'lost' };
+}
+
 function renderMarketIntelCard(row) {
-  const statusBadge = row.status ? `<span class="tag">${escapeHtml(row.status)}</span>` : '';
+  const { tone, badge } = marketIntelToneAndBadge(row.status);
+  const statusBadge = row.status ? `<span class="badge ${badge}">${escapeHtml(row.status)}</span>` : '';
+  const icon = MARKET_INTEL_ICONS[row.category] || 'ti-radar-2';
   const summary = escapeHtml(row.summary || '(no summary — see raw data)');
   const diff = row.diff_text
-    ? `<pre style="white-space:pre-wrap;font-size:12px;opacity:.75;margin-top:6px;">${escapeHtml(row.diff_text.slice(0, 800))}</pre>`
+    ? `<div class="intel-diff">${escapeHtml(row.diff_text.slice(0, 800))}</div>`
     : '';
   return `
-    <div class="lead-card">
-      <div class="lead-card-head">
-        <strong>${escapeHtml(row.label || 'Unknown source')}</strong> ${statusBadge}
-        <span class="sub" style="float:right;">${marketIntelTimeAgo(row.created_at)}</span>
+    <div class="intel-card ${tone}">
+      <div class="intel-card-head">
+        <span class="intel-card-title"><i class="ti ${icon}"></i>${escapeHtml(row.label || 'Unknown source')}</span>
+        <span class="intel-card-meta">${statusBadge}<span class="sub">${marketIntelTimeAgo(row.created_at)}</span></span>
       </div>
-      <div class="lead-card-notes">${summary}</div>
+      <p class="intel-card-summary">${summary}</p>
       ${diff}
     </div>
   `;
